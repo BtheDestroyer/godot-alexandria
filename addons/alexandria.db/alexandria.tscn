@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://ne34eaj22dq2"]
+
+[ext_resource type="Script" path="res://addons/alexandria.db/alexandria.gd" id="1_wmu3n"]
+
+[node name="Alexandria" type="Node"]
+script = ExtResource("1_wmu3n")
