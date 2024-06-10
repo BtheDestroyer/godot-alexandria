@@ -1,0 +1,8 @@
+[gd_scene load_steps=2 format=3 uid="uid://dxeiivpkg4uim"]
+
+[ext_resource type="PackedScene" uid="uid://g10gomjerscx" path="res://entry_field_nodes/entry_field_float.tscn" id="1_1u5kk"]
+
+[node name="EntryField_Int" instance=ExtResource("1_1u5kk")]
+
+[node name="SpinBox" parent="." index="1"]
+rounded = true

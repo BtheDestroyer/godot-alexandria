@@ -11,7 +11,7 @@ config_version=5
 [application]
 
 config/name="Alexandria"
-run/main_scene="res://Test.tscn"
+run/main_scene="res://database_manager.tscn"
 config/features=PackedStringArray("4.3", "Forward Plus")
 config/icon="res://icon.svg"
 
@@ -22,3 +22,7 @@ Alexandria="*res://addons/alexandria.db/alexandria.tscn"
 [editor_plugins]
 
 enabled=PackedStringArray("res://addons/alexandria.db/plugin.cfg")
+
+[gui]
+
+theme/custom="res://ProjectTheme.tres"

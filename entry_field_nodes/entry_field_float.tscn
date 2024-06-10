@@ -1,0 +1,17 @@
+[gd_scene load_steps=3 format=3 uid="uid://g10gomjerscx"]
+
+[ext_resource type="PackedScene" uid="uid://cb5arrv5wqpqb" path="res://entry_field_nodes/entry_field.tscn" id="1_i5qnu"]
+[ext_resource type="Script" path="res://entry_field_nodes/entry_field_float.gd" id="2_ewjeu"]
+
+[node name="EntryField_Float" instance=ExtResource("1_i5qnu")]
+script = ExtResource("2_ewjeu")
+
+[node name="SpinBox" type="SpinBox" parent="." index="1"]
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = -1e+09
+max_value = 1e+09
+allow_greater = true
+allow_lesser = true
+
+[connection signal="value_changed" from="SpinBox" to="." method="_on_spin_box_value_changed"]

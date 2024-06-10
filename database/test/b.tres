@@ -1,0 +1,8 @@
+[gd_resource type="Resource" script_class="AlexandriaSchema_Test" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://database/test/schema.gd" id="1_2aki4"]
+
+[resource]
+script = ExtResource("1_2aki4")
+foo = "B"
+bar = 2

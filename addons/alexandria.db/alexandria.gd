@@ -5,7 +5,7 @@ class SchemaData:
   var schema_path: String
   var script_path: String
   var resource_script: GDScript
-  var exported_properties: Array[String]
+  var exported_properties: PackedStringArray
 
   static func load(schema_name: String) -> SchemaData:
     var schema_path: String = Alexandria.config.database_root.path_join(schema_name)
@@ -27,7 +27,7 @@ class SchemaData:
     return schema_data
 
   func get_entries() -> PackedStringArray:
-    return Array(DirAccess.get_files_at(schema_path)).filter(func(file: String): return file.ends_with(".tres") or file.ends_with(".res"))
+    return Array(DirAccess.get_files_at(schema_path)).filter(func(file: String): return file.ends_with(".tres") or file.ends_with(".res")).map(func(file: String): return file.get_basename())
 
   func has_entry(entry_name: String) -> bool:
     return FileAccess.file_exists(schema_path.path_join(entry_name + ".tres")) or FileAccess.file_exists(schema_path.path_join(entry_name + ".res"))
@@ -62,12 +62,12 @@ class SchemaData:
 var config := AlexandriaConfig.new()
 var schema_library: Array[SchemaData]
 
-static func filter_exported_properties(properties: Array[Dictionary]) -> Array[String]:
+static func filter_exported_properties(properties: Array[Dictionary]) -> PackedStringArray:
   var exported_properties: Array[String]
   exported_properties.assign(properties.filter(func(property: Dictionary): return property["usage"] & PROPERTY_USAGE_SCRIPT_VARIABLE != 0).map(func(property: Dictionary): return property["name"]))
   return exported_properties
 
-static func get_exported_properties(object: Object) -> Array[String]:
+static func get_exported_properties(object: Object) -> PackedStringArray:
   var script := object.get_script() as Script
   if script == null:
     return []
@@ -83,6 +83,9 @@ func _ready() -> void:
 func _build_schema_library() -> void:
   var schema_names := Array(DirAccess.get_directories_at(config.database_root))
   schema_library.assign(schema_names.map(SchemaData.load).filter(func(x): return x != null))
+
+func get_schema_list() -> PackedStringArray:
+  return schema_library.map(func(schema_data: SchemaData) -> String: return schema_data.schema_name)
 
 func get_schema_data(schema_name: String) -> SchemaData:
   for schema_data in schema_library:

@@ -1,0 +1,13 @@
+[gd_scene load_steps=3 format=3 uid="uid://if40xxq76tpo"]
+
+[ext_resource type="PackedScene" uid="uid://cb5arrv5wqpqb" path="res://entry_field_nodes/entry_field.tscn" id="1_uj850"]
+[ext_resource type="Script" path="res://entry_field_nodes/entry_field_string.gd" id="2_yudxa"]
+
+[node name="EntryField_String" instance=ExtResource("1_uj850")]
+script = ExtResource("2_yudxa")
+
+[node name="LineEdit" type="LineEdit" parent="." index="1"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[connection signal="text_changed" from="LineEdit" to="." method="_on_line_edit_text_changed"]
