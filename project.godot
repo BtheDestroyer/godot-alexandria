@@ -19,10 +19,11 @@ config/icon="res://icon.svg"
 
 Alexandria="*res://addons/alexandria.db/alexandria.tscn"
 AlexandriaNetServer="*res://addons/alexandria.netserver/alexandria_net_server.gd"
+AlexandriaNetClient="*res://addons/alexandria.netclient/alexandria_net_client.gd"
 
 [editor_plugins]
 
-enabled=PackedStringArray("res://addons/alexandria.db/plugin.cfg", "res://addons/alexandria.netserver/plugin.cfg")
+enabled=PackedStringArray("res://addons/alexandria.db/plugin.cfg", "res://addons/alexandria.netclient/plugin.cfg", "res://addons/alexandria.netserver/plugin.cfg")
 
 [gui]
 

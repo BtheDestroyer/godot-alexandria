@@ -40,18 +40,26 @@ class SchemaData:
     return schema_data
 
   func get_entries() -> PackedStringArray:
+    if not Alexandria.config.enable_local_database:
+      return []
     return Array(DirAccess.get_files_at(entries_path)).filter(func(file: String): return file.ends_with(".tres") or file.ends_with(".res")).map(func(file: String): return file.get_basename())
 
   func has_entry(entry_name: String) -> bool:
+    if not Alexandria.config.enable_local_database:
+      return false
     return FileAccess.file_exists(entries_path.path_join(entry_name + ".tres")) or FileAccess.file_exists(entries_path.path_join(entry_name + ".res"))
 
-  func create_entry(entry_name: String, binary := false) -> Error:
+  func create_entry(entry_name: String, binary: bool = Alexandria.config.entries_default_as_binary) -> Error:
+    if not Alexandria.config.enable_local_database:
+      return ERR_DATABASE_CANT_WRITE
     if has_entry(entry_name):
       return ERR_ALREADY_EXISTS
     var new_entry := resource_script.new()
     return ResourceSaver.save(new_entry, entries_path.path_join(entry_name + (".res" if binary else ".tres")))
 
   func get_entry(entry_name: String) -> Resource:
+    if not Alexandria.config.enable_local_database:
+      return null
     if FileAccess.file_exists(entries_path.path_join(entry_name + ".tres")):
       return load(entries_path.path_join(entry_name + ".tres")) as Resource
     elif FileAccess.file_exists(entries_path.path_join(entry_name + ".res")):
@@ -59,6 +67,8 @@ class SchemaData:
     return null
 
   func update_entry(entry_name: String, entry_data: Resource) -> Error:
+    if not Alexandria.config.enable_local_database:
+      return ERR_DATABASE_CANT_WRITE
     if FileAccess.file_exists(entries_path.path_join(entry_name + ".tres")):
       return ResourceSaver.save(entry_data, entries_path.path_join(entry_name + ".tres"))
     elif FileAccess.file_exists(entries_path.path_join(entry_name + ".res")):
@@ -66,17 +76,20 @@ class SchemaData:
     return ERR_DOES_NOT_EXIST
 
   func delete_entry(entry_name: String) -> Error:
+    if not Alexandria.config.enable_local_database:
+      return ERR_DATABASE_CANT_WRITE
     if FileAccess.file_exists(entries_path.path_join(entry_name + ".tres")):
       return DirAccess.remove_absolute(entries_path.path_join(entry_name + ".tres"))
     elif FileAccess.file_exists(entries_path.path_join(entry_name + ".res")):
       return DirAccess.remove_absolute(entries_path.path_join(entry_name + ".res"))
     return ERR_DOES_NOT_EXIST
 
-  func serialize_entry(entry_name: String) -> PackedByteArray:
-    var entry := get_entry(entry_name)
+  func serialize_entry(entry_name: String, entry: Resource = null) -> PackedByteArray:
     if entry == null:
-      push_error("No entry for the Alexandria schema \"", schema_name, "\" with the name: ", entry_name)
-      return []
+      entry = get_entry(entry_name)
+      if entry == null:
+        push_error("No entry for the Alexandria schema \"", schema_name, "\" with the name: ", entry_name)
+        return []
     var data := {
       "db": {
         "schema": schema_name,
@@ -104,6 +117,7 @@ class SchemaData:
 
 var config := AlexandriaConfig.new()
 var schema_library: Array[SchemaData]
+var library_loaded := false
 
 static func filter_exported_properties(properties: Array[Dictionary]) -> PackedStringArray:
   var exported_properties: Array[String]
@@ -128,6 +142,8 @@ func _ready() -> void:
     DirAccess.make_dir_recursive_absolute(config.database_root)
   _build_schema_library()
   print("Alexandria loaded ", schema_library.size(), " schemas.")
+  library_loaded = true
+  loaded_schema_library.emit()
 
 func _build_schema_library() -> void:
   var schema_names := Array(DirAccess.get_directories_at(config.database_root))
@@ -141,3 +157,11 @@ func get_schema_data(schema_name: String) -> SchemaData:
     if schema_data.schema_name == schema_name:
       return schema_data
   return null
+
+func get_entry(schema_name: String, entry_name: String) -> Resource:
+  var schema_data := get_schema_data(schema_name)
+  if not schema_data:
+    return null
+  return schema_data.get_entry(entry_name)
+
+signal loaded_schema_library

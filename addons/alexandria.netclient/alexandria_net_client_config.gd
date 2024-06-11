@@ -1,8 +1,11 @@
 class_name AlexandriaNetClientConfig
 
-@export var address := "*"
-@export var port := 34902
-@export var enabled := false
+## Enables the connection to the remote AlexandriaNetServer
+@export var enabled := true
+## Address of the remote AlexandriaNetServer
+@export var address := "127.0.0.1"
+## Port of the remote AlexandriaNetServer
+@export var port := AlexandriaNet.DEFAULT_PORT
 
 func save_properties(config: AlexandriaConfig) -> void:
   for property in _Alexandria.get_exported_properties(self):

@@ -39,7 +39,24 @@ func test_db() -> void:
       push_error("Failed to delete entry: ", error_string(error))
       return
 
+func test_remote_db() -> void:
+  while not AlexandriaNetClient.connection.is_socket_connected():
+    push_warning("AlexandriaNetClient.connection is not connected...")
+    await get_tree().create_timer(0.5).timeout
+  var remote_resource := (await AlexandriaNetClient.get_remote_entry("test", "foo", true)) as AlexandriaSchema_Test
+  print("[Remote Resource] Foo: ", remote_resource.foo, "; bar: ", remote_resource.bar)
+  remote_resource.foo = "Updated"
+  remote_resource.bar = 555
+  print("[Remote Resource] Foo: ", remote_resource.foo, "; bar: ", remote_resource.bar)
+  match AlexandriaNetClient.update_remote_entry("test", "foo", remote_resource):
+    OK:
+      print("Updated remote entry")
+    var error:
+      push_error("Failed to update remote entry: ", error_string(error))
+
 func _ready() -> void:
+  if not Alexandria.library_loaded:
+    await Alexandria.loaded_schema_library
   for schema_name: String in Alexandria.get_schema_list():
     var schema_button := Button.new()
     schema_button.toggle_mode = true

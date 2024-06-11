@@ -1,5 +1,5 @@
 @tool
-extends EditorPlugin
+class_name AlexandriaEditorPlugin extends EditorPlugin
 
 func _enter_tree() -> void:
   # Initialization of the plugin goes here.

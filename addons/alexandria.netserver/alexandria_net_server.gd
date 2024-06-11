@@ -4,6 +4,9 @@ var tcp_server := TCPServer.new()
 var connected_clients: Array[AlexandriaNet_PacketPeerTCP]
 var config := AlexandriaNetServerConfig.new()
 
+func is_server() -> bool:
+  return true
+
 func _ready() -> void:
   Alexandria.config.save_properties.connect(config.save_properties)
   Alexandria.config.load_properties.connect(config.load_properties)
@@ -34,6 +37,10 @@ func _process(_delta: float) -> void:
     while client.get_available_packet_count() > 0:
       var data := AlexandriaNet_PacketDataBuffer.new(client.get_packet())
       var packet := deserialize_packet(data)
-      packet.handle(client, self)
+      match packet.handle(client, self):
+        OK:
+          pass
+        var error:
+          push_error("AlexandriaNetServer failed to handle packet. Error: ", error_string(error), " Packet ID: ", packet_types.find(packet.get_script()))
   for client in to_remove:
     connected_clients.erase(client)
