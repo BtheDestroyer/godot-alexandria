@@ -15,51 +15,96 @@ class Packet:
   func handle(sender: AlexandriaNet_PacketPeerTCP, net: AlexandriaNet) -> Error:
     return ERR_METHOD_NOT_FOUND
 
-## Dummy packet which is used to initiate the TCP connection
-class GreetingPacket extends Packet:
-  static func get_name() -> StringName:
-    return &"GreetingPacket"
-
-  func handle(sender: AlexandriaNet_PacketPeerTCP, net: AlexandriaNet) -> Error:
-    print(sender.get_connected_host(), ":", sender.get_connected_port(), " -> Greeted!")
-    return OK
-
-## Requests a database entry from the remote AlexandriaNetServer
-class DatabaseReadRequestPacket extends Packet:
+## Base type of all packets which involve a database schema interaction
+class DatabaseSchemaPacket extends Packet:
   var schema_name: String
-  var entry_name: String
-  var create_if_does_not_exist := false
 
   static func get_name() -> StringName:
-    return &"DatabaseReadRequestPacket"
+    return &"DatabaseSchemaPacket"
+
+  func _init(schema_name := "") -> void:
+    self.schema_name = schema_name
 
   func serialize() -> AlexandriaNet_PacketDataBuffer:
     var data := AlexandriaNet_PacketDataBuffer.new()
     data.write_utf8_string(schema_name)
-    data.write_utf8_string(entry_name)
-    data.write_u8(create_if_does_not_exist)
     return data
 
   func deserialize(data: AlexandriaNet_PacketDataBuffer) -> void:
     schema_name = data.read_utf8_string()
+
+## Base type of packets which are a response to DatabaseEntryPackets
+class DatabaseSchemaResponsePacket extends DatabaseSchemaPacket:
+  var code: Error = ERR_UNCONFIGURED
+
+  static func get_name() -> StringName:
+    return &"DatabaseSchemaResponsePacket"
+
+  func _init(packet: DatabaseSchemaPacket = null) -> void:
+    if packet:
+      super(packet.schema_name)
+
+  func serialize() -> AlexandriaNet_PacketDataBuffer:
+    var data := super()
+    data.write_u8(code)
+    return data
+
+  func deserialize(data: AlexandriaNet_PacketDataBuffer) -> void:
+    super(data)
+    code = data.read_u8()
+
+## Base type of all packets which involve a database entry interaction
+class DatabaseEntryPacket extends DatabaseSchemaPacket:
+  var entry_name: String
+
+  static func get_name() -> StringName:
+    return &"DatabaseEntryPacket"
+
+  func _init(schema_name := "", entry_name := "") -> void:
+    super(schema_name)
+    self.entry_name = entry_name
+
+  func serialize() -> AlexandriaNet_PacketDataBuffer:
+    var data := super()
+    data.write_utf8_string(entry_name)
+    return data
+
+  func deserialize(data: AlexandriaNet_PacketDataBuffer) -> void:
+    super(data)
     entry_name = data.read_utf8_string()
-    create_if_does_not_exist = data.read_u8()
+
+## Base type of packets which are a response to DatabaseEntryPackets
+class DatabaseEntryResponsePacket extends DatabaseEntryPacket:
+  var code: Error = ERR_UNCONFIGURED
+
+  static func get_name() -> StringName:
+    return &"DatabaseEntryResponsePacket"
+
+  func _init(packet: DatabaseEntryPacket = null) -> void:
+    if packet:
+      super(packet.schema_name, packet.entry_name)
+
+  func serialize() -> AlexandriaNet_PacketDataBuffer:
+    var data := super()
+    data.write_u8(code)
+    return data
+
+  func deserialize(data: AlexandriaNet_PacketDataBuffer) -> void:
+    super(data)
+    code = data.read_u8()
+
+## Requests a database entry to be created on the remote AlexandriaNetServer
+class DatabaseCreateRequestPacket extends DatabaseEntryPacket:
+
+  static func get_name() -> StringName:
+    return &"DatabaseCreateRequestPacket"
 
   func handle(sender: AlexandriaNet_PacketPeerTCP, net: AlexandriaNet) -> Error:
-    var response_packet := DatabaseReadResponsePacket.new()
-    response_packet.schema_name = schema_name
-    response_packet.entry_name = entry_name
+    var response_packet := DatabaseCreateResponsePacket.new(self)
     if net.is_server():
       var schema_data := Alexandria.get_schema_data(schema_name)
       if schema_data:
-        if create_if_does_not_exist and not schema_data.has_entry(entry_name):
-          schema_data.create_entry(entry_name)
-        var entry_data := schema_data.serialize_entry(entry_name)
-        if entry_data.size() > 0:
-          response_packet.entry_data = entry_data
-          response_packet.code = OK
-        else:
-          response_packet.code = ERR_DATABASE_CANT_READ
+        response_packet.code = schema_data.create_entry(entry_name)
       else:
         response_packet.code = ERR_INVALID_PARAMETER
     else:
@@ -67,28 +112,59 @@ class DatabaseReadRequestPacket extends Packet:
     sender.put_packet(net.serialize_packet(response_packet).raw_bytes())
     return response_packet.code
 
+## Sent by AlexandriaNetServer in response to a DatabaseCreateRequestPacket
+class DatabaseCreateResponsePacket extends DatabaseEntryResponsePacket:
+
+  static func get_name() -> StringName:
+    return &"DatabaseCreateResponsePacket"
+
+  func handle(sender: AlexandriaNet_PacketPeerTCP, net: AlexandriaNet) -> Error:
+    if not net.is_client():
+      return ERR_METHOD_NOT_FOUND
+    net.created_database_entry_response.emit(schema_name, entry_name, code)
+    return OK
+
 ## Requests a database entry from the remote AlexandriaNetServer
-class DatabaseReadResponsePacket extends Packet:
-  var code: Error = ERR_UNCONFIGURED
-  var schema_name: String
-  var entry_name: String
+class DatabaseReadRequestPacket extends DatabaseEntryPacket:
+
+  static func get_name() -> StringName:
+    return &"DatabaseReadRequestPacket"
+
+  func handle(sender: AlexandriaNet_PacketPeerTCP, net: AlexandriaNet) -> Error:
+    var response_packet := DatabaseReadResponsePacket.new(self)
+    if net.is_server():
+      var schema_data := Alexandria.get_schema_data(schema_name)
+      if schema_data:
+        if schema_data.has_entry(entry_name):
+          var entry_data := schema_data.serialize_entry(entry_name)
+          if entry_data.size() > 0:
+            response_packet.entry_data = entry_data
+            response_packet.code = OK
+          else:
+            response_packet.code = ERR_DATABASE_CANT_READ
+        else:
+          response_packet.code = ERR_DOES_NOT_EXIST
+      else:
+        response_packet.code = ERR_INVALID_PARAMETER
+    else:
+      response_packet.code = ERR_QUERY_FAILED
+    sender.put_packet(net.serialize_packet(response_packet).raw_bytes())
+    return response_packet.code
+
+## Sent by AlexandriaNetServer in response to a DatabaseReadRequestPacket
+class DatabaseReadResponsePacket extends DatabaseEntryResponsePacket:
   var entry_data: PackedByteArray
 
   static func get_name() -> StringName:
     return &"DatabaseReadResponsePacket"
 
   func serialize() -> AlexandriaNet_PacketDataBuffer:
-    var data := AlexandriaNet_PacketDataBuffer.new()
-    data.write_u8(code)
-    data.write_utf8_string(schema_name)
-    data.write_utf8_string(entry_name)
+    var data := super()
     data.write_byte_array(entry_data)
     return data
 
   func deserialize(data: AlexandriaNet_PacketDataBuffer) -> void:
-    code = data.read_u8()
-    schema_name = data.read_utf8_string()
-    entry_name = data.read_utf8_string()
+    super(data)
     entry_data = data.read_byte_array()
 
   func handle(sender: AlexandriaNet_PacketPeerTCP, net: AlexandriaNet) -> Error:
@@ -100,52 +176,140 @@ class DatabaseReadResponsePacket extends Packet:
     var entry := schema_data.deserialize_entry(entry_data)
     if not entry:
       return ERR_CANT_RESOLVE
-    net.got_database_entry.emit(schema_name, entry_name, entry)
+    net.read_database_entry_response.emit(schema_name, entry_name, entry)
     return OK
 
-## Requests a database entry to be created or updated on the remote AlexandriaNetServer
-class DatabaseWriteRequestPacket extends Packet:
-  var schema_name: String
-  var entry_name: String
+## Requests a database entry to be updated on the remote AlexandriaNetServer
+class DatabaseUpdateRequestPacket extends DatabaseEntryPacket:
   var entry_data: PackedByteArray
 
   static func get_name() -> StringName:
-    return &"DatabaseWriteRequestPacket"
+    return &"DatabaseUpdateRequestPacket"
 
   func serialize() -> AlexandriaNet_PacketDataBuffer:
-    var data := AlexandriaNet_PacketDataBuffer.new()
-    data.write_utf8_string(schema_name)
-    data.write_utf8_string(entry_name)
+    var data := super()
     data.write_byte_array(entry_data)
     return data
 
   func deserialize(data: AlexandriaNet_PacketDataBuffer) -> void:
-    schema_name = data.read_utf8_string()
-    entry_name = data.read_utf8_string()
+    super(data)
     entry_data = data.read_byte_array()
 
   func handle(sender: AlexandriaNet_PacketPeerTCP, net: AlexandriaNet) -> Error:
-    if not net.is_server():
+    var response_packet := DatabaseUpdateResponsePacket.new(self)
+    if net.is_server():
+      var schema_data := Alexandria.get_schema_data(schema_name)
+      if schema_data:
+        var new_entry := schema_data.deserialize_entry(entry_data)
+        if new_entry:
+          response_packet.code = schema_data.update_entry(entry_name, new_entry)
+        else:
+          response_packet.code = ERR_CANT_RESOLVE
+      else:
+        response_packet.code = ERR_INVALID_PARAMETER
+    else:
+      response_packet.code = ERR_QUERY_FAILED
+    sender.put_packet(net.serialize_packet(response_packet).raw_bytes())
+    return response_packet.code
+
+## Sent by AlexandriaNetServer in response to a DatabaseUpdateRequestPacket
+class DatabaseUpdateResponsePacket extends DatabaseEntryResponsePacket:
+
+  static func get_name() -> StringName:
+    return &"DatabaseUpdateResponsePacket"
+
+  func handle(sender: AlexandriaNet_PacketPeerTCP, net: AlexandriaNet) -> Error:
+    if not net.is_client():
       return ERR_METHOD_NOT_FOUND
-    var schema_data := Alexandria.get_schema_data(schema_name)
-    if not schema_data:
-      return ERR_INVALID_PARAMETER
-    if not schema_data.has_entry(entry_name):
-      match schema_data.create_entry(entry_name):
-        OK:
-          pass
-        var error:
-          return ERR_DATABASE_CANT_WRITE
-    var new_entry := schema_data.deserialize_entry(entry_data)
-    if not new_entry:
-      return ERR_CANT_RESOLVE
-    return schema_data.update_entry(entry_name, new_entry)
+    net.updated_database_entry_response.emit(schema_name, entry_name, code)
+    return OK
+
+## Requests a database entry to be deleted on the remote AlexandriaNetServer
+class DatabaseDeleteRequestPacket extends DatabaseEntryPacket:
+
+  static func get_name() -> StringName:
+    return &"DatabaseDeleteRequestPacket"
+
+  func handle(sender: AlexandriaNet_PacketPeerTCP, net: AlexandriaNet) -> Error:
+    var response_packet := DatabaseDeleteResponsePacket.new(self)
+    if net.is_server():
+      var schema_data := Alexandria.get_schema_data(schema_name)
+      if schema_data:
+        response_packet.code = schema_data.delete_entry(entry_name)
+      else:
+        response_packet.code = ERR_INVALID_PARAMETER
+    else:
+      response_packet.code = ERR_QUERY_FAILED
+    sender.put_packet(net.serialize_packet(response_packet).raw_bytes())
+    return response_packet.code
+
+## Sent by AlexandriaNetServer in response to a DatabaseDeleteRequestPacket
+class DatabaseDeleteResponsePacket extends DatabaseEntryResponsePacket:
+
+  static func get_name() -> StringName:
+    return &"DatabaseDeleteResponsePacket"
+
+  func handle(sender: AlexandriaNet_PacketPeerTCP, net: AlexandriaNet) -> Error:
+    if not net.is_client():
+      return ERR_METHOD_NOT_FOUND
+    net.deleted_database_entry_response.emit(schema_name, entry_name, code)
+    return OK
+
+## Requests a list of database entry for a given schema from the remote AlexandriaNetServer
+class DatabaseSchemaEntriesRequestPacket extends DatabaseSchemaPacket:
+
+  static func get_name() -> StringName:
+    return &"DatabaseSchemaEntriesRequestPacket"
+
+  func handle(sender: AlexandriaNet_PacketPeerTCP, net: AlexandriaNet) -> Error:
+    var response_packet := DatabaseSchemaEntriesResponsePacket.new(self)
+    if net.is_server():
+      var schema_data := Alexandria.get_schema_data(schema_name)
+      if schema_data:
+        response_packet.entries = schema_data.get_entries()
+        response_packet.code = OK
+      else:
+        response_packet.code = ERR_INVALID_PARAMETER
+    else:
+      response_packet.code = ERR_QUERY_FAILED
+    sender.put_packet(net.serialize_packet(response_packet).raw_bytes())
+    return response_packet.code
+
+## Sent by AlexandriaNetServer in response to a DatabaseSchemaEntriesRequestPacket
+class DatabaseSchemaEntriesResponsePacket extends DatabaseSchemaResponsePacket:
+  var entries: PackedStringArray
+
+  static func get_name() -> StringName:
+    return &"DatabaseSchemaEntriesResponsePacket"
+
+  func serialize() -> AlexandriaNet_PacketDataBuffer:
+    var data := super()
+    data.write_u16(entries.size())
+    for entry: String in entries:
+      data.write_utf8_string(entry)
+    return data
+
+  func deserialize(data: AlexandriaNet_PacketDataBuffer) -> void:
+    super(data)
+    entries.resize(data.read_u16())
+    for i: int in range(entries.size()):
+      entries[i] = data.read_utf8_string()
+
+  func handle(sender: AlexandriaNet_PacketPeerTCP, net: AlexandriaNet) -> Error:
+    if not net.is_client():
+      return ERR_METHOD_NOT_FOUND
+    net.database_schema_entries_response.emit(schema_name, entries)
+    return OK
 
 var packet_types := [
-  GreetingPacket,
+  DatabaseCreateRequestPacket,
+  DatabaseCreateResponsePacket,
   DatabaseReadRequestPacket,
   DatabaseReadResponsePacket,
-  DatabaseWriteRequestPacket,
+  DatabaseUpdateRequestPacket,
+  DatabaseUpdateResponsePacket,
+  DatabaseSchemaEntriesRequestPacket,
+  DatabaseSchemaEntriesResponsePacket
 ]
 
 func is_server() -> bool:
@@ -170,4 +334,8 @@ func deserialize_packet(data: AlexandriaNet_PacketDataBuffer) -> Packet:
   packet.deserialize(data.read_packet_data_buffer())
   return packet
 
-signal got_database_entry(schema_name: String, entry_name: String, entry: Resource)
+signal created_database_entry_response(schema_name: String, entry_name: String, code: Error)
+signal read_database_entry_response(schema_name: String, entry_name: String, entry: Resource)
+signal updated_database_entry_response(schema_name: String, entry_name: String, code: Error)
+signal deleted_database_entry_response(schema_name: String, entry_name: String, code: Error)
+signal database_schema_entries_response(schema_name: String, entries: PackedStringArray)

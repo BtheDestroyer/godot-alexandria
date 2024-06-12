@@ -43,12 +43,11 @@ func test_remote_db() -> void:
   while not AlexandriaNetClient.connection.is_socket_connected():
     push_warning("AlexandriaNetClient.connection is not connected...")
     await get_tree().create_timer(0.5).timeout
+  print("Remote entries: ", await AlexandriaNetClient.get_remote_entries("test"))
   var remote_resource := (await AlexandriaNetClient.get_remote_entry("test", "foo", true)) as AlexandriaSchema_Test
-  print("[Remote Resource] Foo: ", remote_resource.foo, "; bar: ", remote_resource.bar)
   remote_resource.foo = "Updated"
   remote_resource.bar = 555
-  print("[Remote Resource] Foo: ", remote_resource.foo, "; bar: ", remote_resource.bar)
-  match AlexandriaNetClient.update_remote_entry("test", "foo", remote_resource):
+  match await AlexandriaNetClient.update_remote_entry("test", "foo", remote_resource):
     OK:
       print("Updated remote entry")
     var error:
@@ -64,6 +63,7 @@ func _ready() -> void:
     schema_button.pressed.connect(_on_schema_button_pressed.bind(schema_name, schema_button))
     schema_button.pressed.connect(_on_list_button_pressed.bind(schema_button_container, schema_button))
     schema_button_container.add_child(schema_button)
+  test_remote_db()
 
 func _notification(what: int) -> void:
   match what:
