@@ -136,10 +136,17 @@ class DatabaseReadRequestPacket extends DatabaseEntryPacket:
       var schema_data := Alexandria.get_schema_data(schema_name)
       if schema_data:
         if schema_data.has_entry(entry_name):
-          var entry_data := schema_data.serialize_entry(entry_name)
-          if entry_data.size() > 0:
-            response_packet.entry_data = entry_data
-            response_packet.code = OK
+          var entry := schema_data.get_entry(entry_name)
+          if entry:
+            if Alexandria.get_entry_permissions_for_user(entry, net.get_connected_client_for_connection(sender).session_token.user) & Alexandria_Entry.Permissions.READ:
+              var entry_data := schema_data.serialize_entry(entry_name, entry)
+              if entry_data.size() > 0:
+                response_packet.entry_data = entry_data
+                response_packet.code = OK
+              else:
+                response_packet.code = ERR_CANT_RESOLVE
+            else:
+              response_packet.code = ERR_FILE_NO_PERMISSION
           else:
             response_packet.code = ERR_DATABASE_CANT_READ
         else:
@@ -202,7 +209,15 @@ class DatabaseUpdateRequestPacket extends DatabaseEntryPacket:
       if schema_data:
         var new_entry := schema_data.deserialize_entry(entry_data)
         if new_entry:
-          response_packet.code = schema_data.update_entry(entry_name, new_entry)
+          var can_write := true
+          if new_entry is Alexandria_Entry:
+            var existing_entry := schema_data.get_entry(entry_name)
+            if existing_entry:
+              can_write = Alexandria.get_entry_permissions_for_user(existing_entry, net.get_connected_client_for_connection(sender).session_token.user) & Alexandria_Entry.Permissions.UPDATE
+          if can_write:
+            response_packet.code = schema_data.update_entry(entry_name, new_entry)
+          else:
+            response_packet.code = ERR_FILE_NO_PERMISSION
         else:
           response_packet.code = ERR_CANT_RESOLVE
       else:
@@ -235,7 +250,14 @@ class DatabaseDeleteRequestPacket extends DatabaseEntryPacket:
     if net.is_server():
       var schema_data := Alexandria.get_schema_data(schema_name)
       if schema_data:
-        response_packet.code = schema_data.delete_entry(entry_name)
+        var can_delete := true
+        var existing_entry := schema_data.get_entry(entry_name)
+        if existing_entry is Alexandria_Entry:
+          can_delete = Alexandria.get_entry_permissions_for_user(existing_entry, net.get_connected_client_for_connection(sender).session_token.user) & Alexandria_Entry.Permissions.DELETE
+        if can_delete:
+          response_packet.code = schema_data.delete_entry(entry_name)
+        else:
+          response_packet.code = ERR_FILE_NO_PERMISSION
       else:
         response_packet.code = ERR_INVALID_PARAMETER
     else:

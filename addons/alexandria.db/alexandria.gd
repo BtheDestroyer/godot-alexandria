@@ -63,12 +63,14 @@ class SchemaData:
       return false
     return FileAccess.file_exists(entries_path.path_join(entry_name + ".tres")) or FileAccess.file_exists(entries_path.path_join(entry_name + ".res"))
 
-  func create_entry(entry_name: String, binary: bool = Alexandria.config.entries_default_as_binary) -> Error:
+  func create_entry(entry_name: String, owner: Alexandria_User = null, binary: bool = Alexandria.config.entries_default_as_binary) -> Error:
     if not Alexandria.config.enable_local_database:
       return ERR_DATABASE_CANT_WRITE
     if has_entry(entry_name):
       return ERR_ALREADY_EXISTS
     var new_entry := resource_script.new()
+    if new_entry is Alexandria_Entry:
+      new_entry.owner = owner
     return ResourceSaver.save(new_entry, entries_path.path_join(entry_name + (".res" if binary else ".tres")))
 
   func get_entry(entry_name: String) -> Resource:

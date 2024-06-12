@@ -14,10 +14,15 @@ var crypto := Crypto.new()
 var crypto_key := CryptoKey.new()
 
 func assign_session_token_to_connection(connection: AlexandriaNet_PacketPeerTCP, session_token: AlexandriaNet_SessionToken) -> void:
+  var client := get_connected_client_for_connection(connection)
+  if client:
+    client.session_token = session_token
+
+func get_connected_client_for_connection(connection: AlexandriaNet_PacketPeerTCP) -> ConnectedClient:
   for client: ConnectedClient in connected_clients:
     if client.connection == connection:
-      client.session_token = session_token
-      return
+      return client
+  return null
 
 func _generate_crypto_key() -> void:
   crypto_key = crypto.generate_rsa(1024)
