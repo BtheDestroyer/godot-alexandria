@@ -12,4 +12,8 @@ enum Permissions {
 
 @export var owner: Alexandria_User
 @export var owner_permissions := Permissions.READ_UPDATE_DELETE
-@export var everyone_permissions := Permissions.READ
+@export var everyone_permissions := Permissions.READ:
+  get:
+    if owner == null:
+      return owner_permissions
+    return everyone_permissions
