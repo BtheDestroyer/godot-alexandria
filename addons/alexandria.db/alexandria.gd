@@ -1,5 +1,19 @@
 class_name _Alexandria extends Node
 
+# UUID implementation inspired by: https://github.com/binogure-studio/godot-uuid/
+static func _uuid_base() -> PackedByteArray:
+  # Avoids for loop, magic number bitmask
+  var bytes: PackedByteArray
+  bytes.resize(16)
+  bytes.encode_u32(0, randi())
+  bytes.encode_u32(4, (randi() & 0xFF0FFF3F) | 0x00400080)
+  bytes.encode_u32(8, randi())
+  bytes.encode_u32(12, randi())
+  return bytes
+
+static func uuid_v4() -> String:
+  return "%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x" % _uuid_base()
+
 class SchemaData:
   var schema_name: String
   var entries_path: String
@@ -163,5 +177,23 @@ func get_entry(schema_name: String, entry_name: String) -> Resource:
   if not schema_data:
     return null
   return schema_data.get_entry(entry_name)
+
+func get_entry_permissions_for_user(entry: Resource, user: Alexandria_User) -> Alexandria_Entry.Permissions:
+  var permissions := Alexandria_Entry.Permissions.NONE
+  if entry is Alexandria_Entry:
+    if entry.owner == user:
+      permissions |= entry.owner_permissions
+    else:
+      permissions |= entry.everyone_permissions
+  match user.rank:
+    Alexandria_User.Rank.UNVALIDATED, Alexandria_User.Rank.USER:
+      pass
+    Alexandria_User.Rank.MODERATOR:
+      permissions |= Alexandria_Entry.Permissions.READ
+    Alexandria_User.Rank.ADMINISTRATOR:
+      permissions |= Alexandria_Entry.Permissions.READ_UPDATE
+    Alexandria_User.Rank.DEVELOPER:
+      permissions |= Alexandria_Entry.Permissions.READ_UPDATE_DELETE
+  return permissions
 
 signal loaded_schema_library

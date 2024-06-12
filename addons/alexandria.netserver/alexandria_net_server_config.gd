@@ -6,6 +6,8 @@ class_name AlexandriaNetServerConfig
 @export var bind_address := "*"
 ## Local port on which to host
 @export var port := AlexandriaNet.DEFAULT_PORT
+## Root folder of user entries
+@export var users_root := "./users/"
 
 func save_properties(config: AlexandriaConfig) -> void:
   for property in _Alexandria.get_exported_properties(self):
