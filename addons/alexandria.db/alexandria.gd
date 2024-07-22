@@ -12,7 +12,7 @@ static func _uuid_base() -> PackedByteArray:
   return bytes
 
 static func uuid_v4() -> String:
-  return "%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x" % _uuid_base()
+  return "%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x" % Array(_uuid_base())
 
 class SchemaData:
   var schema_name: String

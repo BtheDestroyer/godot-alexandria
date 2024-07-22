@@ -2,3 +2,6 @@
 .godot/
 android/
 **/*.tmp
+crypto.key
+users/
+database/

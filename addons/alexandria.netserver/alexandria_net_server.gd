@@ -10,7 +10,6 @@ class ConnectedClient:
 var tcp_server := TCPServer.new()
 var connected_clients: Array[ConnectedClient]
 var config := AlexandriaNetServerConfig.new()
-var crypto := Crypto.new()
 var crypto_key := CryptoKey.new()
 
 func assign_session_token_to_connection(connection: AlexandriaNet_PacketPeerTCP, session_token: AlexandriaNet_SessionToken) -> void:
@@ -36,8 +35,8 @@ func create_user(username: String) -> Error:
   if user_exists(username):
     return ERR_ALREADY_EXISTS
   var new_user := Alexandria_User.new()
-  new_user.username = username
-  return OK
+  new_user.password_salt = crypto.generate_random_bytes(64)
+  return ResourceSaver.save(new_user, config.users_root.path_join(username + ".res"))
 
 func attempt_login(username: String, password: String) -> AlexandriaNet_SessionToken:
   if not user_exists(username):
@@ -46,7 +45,15 @@ func attempt_login(username: String, password: String) -> AlexandriaNet_SessionT
   if not user.check_password(password):
     return null
   var new_session_token := AlexandriaNet_SessionToken.new(user)
-  user.valid_sessions.append(new_session_token)
+  if user.session_tokens.size() > 15:
+    user.session_tokens.assign(user.session_tokens.slice(user.session_tokens.size() - 15))
+  user.session_tokens.append(new_session_token)
+  match ResourceSaver.save(user):
+    OK:
+      pass
+    var error:
+      push_error("Failed to save user after appending a new session_token: ", error_string(error))
+      return null
   return new_session_token
 
 func get_user(username: String) -> Alexandria_User:
@@ -56,7 +63,7 @@ func get_user(username: String) -> Alexandria_User:
   return null
 
 func user_exists(username: String) -> bool:
-  return false
+  return get_user(username) != null
 
 func is_server() -> bool:
   return true
@@ -72,6 +79,8 @@ func _ready() -> void:
   await Alexandria.config.loaded
   if not config.enabled:
     return
+  if not DirAccess.dir_exists_absolute(config.users_root):
+    DirAccess.make_dir_recursive_absolute(config.users_root)
   match tcp_server.listen(config.port, config.bind_address):
     OK:
       print("AlexandriaNetServer hosting @ ", config.bind_address, ":", config.port)
@@ -86,6 +95,10 @@ func _process(_delta: float) -> void:
     var connection := AlexandriaNet_PacketPeerTCP.new(tcp_server.take_connection())
     connected_clients.push_back(ConnectedClient.new(connection))
     print("AlexandriaNetServer got a new connection from ", connection.get_connected_host(), ":", connection.get_connected_port())
+    var welcome_packet := AlexandriaNet.PublicKeyPacket.new()
+    welcome_packet.key.load_from_string(crypto_key.save_to_string(true), true)
+    var packet_bytes := serialize_packet(welcome_packet).raw_bytes()
+    connection.put_packet(packet_bytes)
   var to_remove: Array[AlexandriaNet_PacketPeerTCP]
   for client: ConnectedClient in connected_clients:
     if client.connection.poll() != OK or client.connection.is_socket_disconnected():

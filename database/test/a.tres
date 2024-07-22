@@ -1,8 +1,0 @@
-[gd_resource type="Resource" script_class="AlexandriaSchema_Test" load_steps=2 format=3 uid="uid://cu46vmuq4net0"]
-
-[ext_resource type="Script" path="res://database/test/schema.gd" id="1_ybcfv"]
-
-[resource]
-script = ExtResource("1_ybcfv")
-foo = "A"
-bar = 1

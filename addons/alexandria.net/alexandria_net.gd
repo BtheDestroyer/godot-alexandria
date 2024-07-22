@@ -1,10 +1,16 @@
 class_name AlexandriaNet extends Node
 
+var crypto := Crypto.new()
+
 const DEFAULT_PORT := 34902
 
 class Packet:
+  
   static func get_name() -> StringName:
     return &"Packet"
+    
+  static func is_encrypted() -> bool:
+    return true
 
   func serialize() -> AlexandriaNet_PacketDataBuffer:
     return AlexandriaNet_PacketDataBuffer.new()
@@ -428,7 +434,154 @@ class DatabaseSchemaEntriesResponsePacket extends DatabaseSchemaResponsePacket:
     net.database_schema_entries_response.emit(schema_name, entries)
     return OK
 
+## Public key provided by AlexandriaNetServer to enable encrypted traffic to the server
+class PublicKeyPacket extends Packet:
+  var key := CryptoKey.new()
+  
+  static func get_name() -> StringName:
+    return &"DatabaseLoginRequestPacket"
+    
+  static func is_encrypted() -> bool:
+    return false
+    
+  func serialize() -> AlexandriaNet_PacketDataBuffer:
+    var data := super()
+    data.write_utf8_string(key.save_to_string(true))
+    return data
+
+  func deserialize(data: AlexandriaNet_PacketDataBuffer) -> void:
+    super(data)
+    key.load_from_string(data.read_utf8_string(), true)
+  
+  func handle(sender: AlexandriaNet_PacketPeerTCP, net: AlexandriaNet) -> Error:
+    if not net.is_client():
+      return ERR_METHOD_NOT_FOUND
+    net.remote_public_key = key
+    return OK
+    
+## Packet involving a user or session interaction
+class UserPacket extends Packet:
+  var username: String
+  
+  static func get_name() -> StringName:
+    return &"UserPacket"
+
+  func _init(packet: UserPacket = null) -> void:
+    if packet:
+      username = packet.username
+  
+  func serialize() -> AlexandriaNet_PacketDataBuffer:
+    var data := super()
+    data.write_utf8_string(username)
+    return data
+
+  func deserialize(data: AlexandriaNet_PacketDataBuffer) -> void:
+    super(data)
+    username = data.read_utf8_string()
+  
+## Sent by AlexandriaNetClient to request a user or session interaction
+class UserRequestPacket extends UserPacket:
+  var password: String
+  
+  static func get_name() -> StringName:
+    return &"UserRequestPacket"
+  
+  func serialize() -> AlexandriaNet_PacketDataBuffer:
+    var data := super()
+    data.write_utf8_string(password)
+    return data
+
+  func deserialize(data: AlexandriaNet_PacketDataBuffer) -> void:
+    super(data)
+    password = data.read_utf8_string()
+  
+## Sent by AlexandriaNetServer in response to a UserRequestPacket
+class UserResponsePacket extends UserPacket:
+  var code: Error = ERR_UNCONFIGURED
+
+  static func get_name() -> StringName:
+    return &"UserResponsePacket"
+
+  func _init(packet: UserRequestPacket = null) -> void:
+    super(packet)
+  
+  func serialize() -> AlexandriaNet_PacketDataBuffer:
+    var data := super()
+    data.write_u8(code)
+    return data
+
+  func deserialize(data: AlexandriaNet_PacketDataBuffer) -> void:
+    super(data)
+    code = data.read_u8()
+
+## Request by AlexandriaNetClient to request a new user be created
+class CreateUserRequestPacket extends UserRequestPacket:
+  
+  static func get_name() -> StringName:
+    return &"CreateUserRequestPacket"
+
+  func handle(sender: AlexandriaNet_PacketPeerTCP, net: AlexandriaNet) -> Error:
+    var response_packet := CreateUserResponsePacket.new(self)
+    if net.is_server():
+      response_packet.code = net.create_user(username)
+      if response_packet.code == OK:
+        var user: Alexandria_User = net.get_user(username)
+        user.update_password(password)
+        response_packet.code = ResourceSaver.save(user)
+    else:
+      response_packet.code = ERR_QUERY_FAILED
+    sender.put_packet(net.serialize_packet(response_packet).raw_bytes())
+    return response_packet.code
+
+## Sent by AlexandriaNetServer in response to a LoginRequestPacket
+class CreateUserResponsePacket extends UserResponsePacket:
+
+  static func get_name() -> StringName:
+    return &"CreateUserResponsePacket"
+
+  func handle(sender: AlexandriaNet_PacketPeerTCP, net: AlexandriaNet) -> Error:
+    if not net.is_client():
+      return ERR_METHOD_NOT_FOUND
+    net.create_user_response.emit(username, code)
+    return OK
+    
+## Request by AlexandriaNetClient to initiate a user session
+class LoginRequestPacket extends UserRequestPacket:
+  
+  static func get_name() -> StringName:
+    return &"LoginRequestPacket"
+
+  func handle(sender: AlexandriaNet_PacketPeerTCP, net: AlexandriaNet) -> Error:
+    var response_packet := LoginResponsePacket.new(self)
+    if net.is_server():
+      var session_token: AlexandriaNet_SessionToken = net.attempt_login(username, password)
+      if session_token:
+        response_packet.code = OK
+      else:
+        response_packet.code = ERR_INVALID_PARAMETER
+    else:
+      response_packet.code = ERR_QUERY_FAILED
+    sender.put_packet(net.serialize_packet(response_packet).raw_bytes())
+    return response_packet.code
+
+## Sent by AlexandriaNetServer in response to a LoginRequestPacket
+class LoginResponsePacket extends UserResponsePacket:
+
+  static func get_name() -> StringName:
+    return &"LoginResponsePacket"
+
+  func _init(packet: LoginRequestPacket = null) -> void:
+    if packet:
+      username = packet.username
+
+  func handle(sender: AlexandriaNet_PacketPeerTCP, net: AlexandriaNet) -> Error:
+    if not net.is_client():
+      return ERR_METHOD_NOT_FOUND
+    net.login_response.emit(username, code)
+    return OK
+
 var packet_types := [
+  PublicKeyPacket,
   DatabaseTransactionRequestPacket,
   DatabaseTransactionResponsePacket,
   DatabaseCreateRequestPacket,
@@ -438,7 +591,11 @@ var packet_types := [
   DatabaseUpdateRequestPacket,
   DatabaseUpdateResponsePacket,
   DatabaseSchemaEntriesRequestPacket,
-  DatabaseSchemaEntriesResponsePacket
+  DatabaseSchemaEntriesResponsePacket,
+  CreateUserRequestPacket,
+  CreateUserResponsePacket,
+  LoginRequestPacket,
+  LoginResponsePacket
 ]
 
 func is_server() -> bool:
@@ -454,13 +611,19 @@ func serialize_packet(packet: Packet) -> AlexandriaNet_PacketDataBuffer:
     push_error("AlexandriaNet failed to get packet id for packet: ", packet.get_name())
     return data
   data.write_u16(id)
-  data.write_packet_data_buffer(packet.serialize())
+  var packet_bytes := packet.serialize()
+  if is_client() and packet.is_encrypted():
+    packet_bytes._bytes = crypto.encrypt(self.remote_public_key, packet_bytes._bytes)
+  data.write_packet_data_buffer(packet_bytes)
   return data
 
 func deserialize_packet(data: AlexandriaNet_PacketDataBuffer) -> Packet:
   var id := data.read_u16()
   var packet: Packet = packet_types[id].new()
-  packet.deserialize(data.read_packet_data_buffer())
+  var packet_bytes := data.read_packet_data_buffer()
+  if is_server() and packet.is_encrypted():
+    packet_bytes._bytes = crypto.decrypt(self.crypto_key, packet_bytes._bytes)
+  packet.deserialize(packet_bytes)
   return packet
 
 signal created_database_entry_response(schema_name: String, entry_name: String, code: Error)
@@ -469,3 +632,5 @@ signal updated_database_entry_response(schema_name: String, entry_name: String, 
 signal deleted_database_entry_response(schema_name: String, entry_name: String, code: Error)
 signal database_schema_entries_response(schema_name: String, entries: PackedStringArray)
 signal transaction_response(transaction_name: String, code: Error, error_reason: String)
+signal create_user_response(username: String, code: Error)
+signal login_response(username: String, code: Error)
