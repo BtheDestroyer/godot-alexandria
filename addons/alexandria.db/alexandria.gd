@@ -42,6 +42,9 @@ class SchemaData:
     if resource_script == null:
       push_error("Failed to load Alexandria schema script: ", script_path)
       return null
+    if resource_script.new() is Alexandria_Transaction:
+      # Silently ignore transactions
+      return null
     var schema_data := SchemaData.new()
     schema_data.schema_name = schema_name
     schema_data.entries_path = Alexandria.config.database_root.path_join(schema_name)
@@ -131,8 +134,74 @@ class SchemaData:
       entry.set(property, data["entry"].get(property, entry.get(property)))
     return entry
 
+class TransactionData:
+  var transaction_name: String
+  var script_path: String
+  var resource_script: GDScript
+  var exported_properties: PackedStringArray
+
+  static func find_valid_script_path(transaction_name: String) -> String:
+    var transaction_path: String = Alexandria.config.transactions_root.path_join(transaction_name + ".gd")
+    if FileAccess.file_exists(transaction_path):
+      return transaction_path
+    return ""
+
+  static func load(transaction_name: String) -> TransactionData:
+    var script_path := find_valid_script_path(transaction_name)
+    if script_path.is_empty():
+      push_error("No script file for Alexandria transaction: ", transaction_name)
+      return null
+    var resource_script := load(script_path) as GDScript
+    if resource_script == null:
+      push_error("Failed to load Alexandria transaction script: ", script_path)
+      return null
+    if not resource_script.new() is Alexandria_Transaction:
+      # Silently ignore non-transactions
+      return null
+    for required_method: String in ["check_requirements", "apply"]:
+      if not resource_script.has_method(required_method):
+        push_error("Alexandria transaction script is missing the ", required_method, " method: ", script_path)
+        return null
+    var transaction_data := TransactionData.new()
+    transaction_data.transaction_name = transaction_name
+    transaction_data.script_path = script_path
+    transaction_data.resource_script = resource_script
+    transaction_data.exported_properties = _Alexandria.filter_exported_properties(resource_script.get_script_property_list())
+    print("Alexandria loaded data for transaction: ", transaction_name)
+    return transaction_data
+
+  func serialize_transaction(transaction: Alexandria_Transaction = null) -> PackedByteArray:
+    if transaction == null:
+      push_error("No transaction given for call to Alexandria.TransactionData.serialize_transaction")
+      return []
+    if transaction.get_script() != resource_script:
+      push_error("Transaction type given to Alexandria.TransactionData.serialize_transaction (", (transaction.get_script() as GDScript).resource_path.get_file(), ") was for the wrong transaction resource (", transaction_name, ")")
+      return []
+    var data := {
+      "db": {
+        "transaction": transaction_name
+      },
+      "transaction": {}
+    }
+    for property: String in exported_properties:
+      data["transaction"][property] = transaction.get(property)
+    var json := JSON.stringify(data)
+    return json.to_utf8_buffer()
+
+  func deserialize_transaction(buffer: PackedByteArray) -> Resource:
+    var json := buffer.get_string_from_utf8()
+    var data := JSON.parse_string(json)
+    if data["db"]["transaction"] != transaction_name:
+      push_error("Tried to deserialize an Alexandria transaction for the type \"", data["db"]["transaction"], "\" with the transaction \"", transaction_name, "\"")
+      return null
+    var transaction: Resource = resource_script.new()
+    for property: String in exported_properties:
+      transaction.set(property, data["entry"].get(property, transaction.get(property)))
+    return transaction
+
 var config := AlexandriaConfig.new()
 var schema_library: Array[SchemaData]
+var transaction_library: Array[TransactionData]
 var library_loaded := false
 
 static func filter_exported_properties(properties: Array[Dictionary]) -> PackedStringArray:
@@ -158,6 +227,8 @@ func _ready() -> void:
     DirAccess.make_dir_recursive_absolute(config.database_root)
   _build_schema_library()
   print("Alexandria loaded ", schema_library.size(), " schemas.")
+  _build_transaction_library()
+  print("Alexandria loaded ", transaction_library.size(), " transactions.")
   library_loaded = true
   loaded_schema_library.emit()
 
@@ -172,6 +243,19 @@ func get_schema_data(schema_name: String) -> SchemaData:
   for schema_data in schema_library:
     if schema_data.schema_name == schema_name:
       return schema_data
+  return null
+
+func _build_transaction_library() -> void:
+  var transaction_names := Array(DirAccess.get_directories_at(config.database_root))
+  transaction_library.assign(transaction_names.map(TransactionData.load).filter(func(x): return x != null))
+
+func get_transaction_list() -> PackedStringArray:
+  return transaction_library.map(func(schema_data: SchemaData) -> String: return schema_data.schema_name)
+
+func get_transaction_data(transaction_name: String) -> TransactionData:
+  for transaction_data in transaction_library:
+    if transaction_data.transaction_name == transaction_name:
+      return transaction_data
   return null
 
 func get_entry(schema_name: String, entry_name: String) -> Resource:

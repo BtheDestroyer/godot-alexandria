@@ -97,3 +97,15 @@ func delete_remote_entry(schema_name: String, entry_name: String, timeout := 10.
 
 func get_remote_entries(schema_name: String, timeout := 10.0) -> PackedStringArray:
   return await _perform_remote_request(DatabaseSchemaEntriesRequestPacket.new(schema_name), schema_entries_responses, timeout)
+
+# Transaction Name -> Error Code
+var transaction_responses := {}
+func apply_remote_transaction(transaction_name: String, transaction: Alexandria_Transaction = null, timeout := 10.0) -> Error:
+  var transaction_data := Alexandria.get_transaction_data(transaction_name)
+  if transaction_data == null:
+    push_error("No registered transaction with the name \"", transaction_name, "\"")
+    return ERR_CANT_ACQUIRE_RESOURCE
+  if transaction == null:
+    transaction = transaction_data.resource_script.new()
+  var packet := DatabaseTransactionRequestPacket.new(transaction, transaction_name)
+  return await _perform_remote_request(packet, transaction_responses, timeout)

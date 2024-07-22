@@ -12,6 +12,10 @@ const PATH := "./alexandria.cfg"
 ## - <schema_root>/<schema_name>/schema.gd
 ## - <schema_root>/<schema_name>.gd
 @export var schema_root := "./database/"
+## Root folder of transaction scripts
+## Transaction scripts can be named:
+## - <transactions_root>/<transaction_name>.gd
+@export var transactions_root := "./database/"
 ## If true, new entries will be created as binary .res files
 ## Otherwise, new entries will be created as text .tres files
 @export var entries_default_as_binary := true

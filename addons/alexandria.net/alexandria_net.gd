@@ -93,6 +93,92 @@ class DatabaseEntryResponsePacket extends DatabaseEntryPacket:
     super(data)
     code = data.read_u8()
 
+## Base type of all packets which involve a database transaction
+class DatabaseTransactionPacket extends Packet:
+  var transaction_name: String
+
+  static func get_name() -> StringName:
+    return &"DatabaseTransactionPacket"
+
+  func _init(transaction_name := "") -> void:
+    self.transaction_name = transaction_name
+
+  func serialize() -> AlexandriaNet_PacketDataBuffer:
+    var data := super()
+    data.write_utf8_string(transaction_name)
+    return data
+
+  func deserialize(data: AlexandriaNet_PacketDataBuffer) -> void:
+    super(data)
+    transaction_name = data.read_utf8_string()
+
+## Base type of packets which are a response to DatabaseTransactionPackets
+class DatabaseTransactionResponsePacket extends DatabaseTransactionPacket:
+  var code: Error = ERR_UNCONFIGURED
+
+  static func get_name() -> StringName:
+    return &"DatabaseTransactionResponsePacket"
+
+  func _init(packet: DatabaseTransactionPacket = null) -> void:
+    if packet:
+      super(packet.transaction_name)
+
+  func serialize() -> AlexandriaNet_PacketDataBuffer:
+    var data := super()
+    data.write_u8(code)
+    return data
+
+  func deserialize(data: AlexandriaNet_PacketDataBuffer) -> void:
+    super(data)
+    code = data.read_u8()
+
+## Base type of all packets which involve a database transaction
+class DatabaseTransactionRequestPacket extends DatabaseTransactionPacket:
+  var transaction: Alexandria_Transaction
+
+  static func get_name() -> StringName:
+    return &"DatabaseTransactionRequestPacket"
+
+  func _init(transaction: Alexandria_Transaction, transaction_name := (transaction.get_script() as GDScript).resource_path.get_file().get_basename()) -> void:
+    super(transaction_name)
+    self.transaction = transaction
+
+  func serialize() -> AlexandriaNet_PacketDataBuffer:
+    var data := super()
+    var transaction_data := Alexandria.get_transaction_data(transaction_name)
+    if transaction_data == null:
+      push_error("Failed to serialize ", get_name(), " as \"", transaction_name, "\" didn't have registered transaction data")
+      return null
+    var serialized_data := transaction_data.serialize_transaction(transaction)
+    data.write_byte_array(serialized_data)
+    return data
+
+  func deserialize(data: AlexandriaNet_PacketDataBuffer) -> void:
+    super(data)
+    var transaction_data := Alexandria.get_transaction_data(transaction_name)
+    if transaction_data == null:
+      push_error("Failed to deserialize ", get_name(), " as \"", transaction_name, "\" didn't have registered transaction data")
+      transaction = null
+      return
+    var serialized_data := data.read_byte_array()
+    transaction = transaction_data.deserialize_transaction(serialized_data)
+
+  func handle(sender: AlexandriaNet_PacketPeerTCP, net: AlexandriaNet) -> Error:
+    var response_packet := DatabaseTransactionResponsePacket.new(self)
+    if net.is_server():
+      if transaction == null:
+        if transaction.check_requirements():
+          transaction.apply()
+          response_packet.code = OK
+        else:
+            response_packet.code = ERR_FILE_MISSING_DEPENDENCIES
+      else:
+        response_packet.code = ERR_INVALID_PARAMETER
+    else:
+      response_packet.code = ERR_QUERY_FAILED
+    sender.put_packet(net.serialize_packet(response_packet).raw_bytes())
+    return response_packet.code
+
 ## Requests a database entry to be created on the remote AlexandriaNetServer
 class DatabaseCreateRequestPacket extends DatabaseEntryPacket:
 
@@ -324,6 +410,8 @@ class DatabaseSchemaEntriesResponsePacket extends DatabaseSchemaResponsePacket:
     return OK
 
 var packet_types := [
+  DatabaseTransactionRequestPacket,
+  DatabaseTransactionResponsePacket,
   DatabaseCreateRequestPacket,
   DatabaseCreateResponsePacket,
   DatabaseReadRequestPacket,
