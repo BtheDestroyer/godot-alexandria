@@ -23,6 +23,7 @@ func _ready() -> void:
   updated_database_entry_response.connect(_store_remote_entry_response.bind(update_responses))
   deleted_database_entry_response.connect(_store_remote_entry_response.bind(delete_responses))
   database_schema_entries_response.connect(_store_remote_schema_response.bind(schema_entries_responses))
+  transaction_response.connect(_store_remote_transaction_response.bind(transaction_responses))
 
 func _process(_delta: float) -> void:
   connection.poll()
@@ -48,6 +49,11 @@ func _store_remote_entry_response(schema_name: String, entry_name: String, respo
 var schema_entries_responses := {}
 func _store_remote_schema_response(schema_name: String, response, response_dictionary: Dictionary) -> void:
   response_dictionary[schema_name] = response
+
+# Transaction Name -> [Error Code, Error Reason]
+var transaction_responses := {}
+func _store_remote_transaction_response(transaction_name: String, response_code: Error, response_reason: String, response_dictionary: Dictionary) -> void:
+  response_dictionary[transaction_name] = [response_code, response_reason]
 
 func _perform_remote_request(request_packet: Packet, response_dictionary: Dictionary, timeout: float) -> Variant:
   match connection.put_packet(serialize_packet(request_packet).raw_bytes()):
@@ -76,6 +82,16 @@ func _perform_remote_request(request_packet: Packet, response_dictionary: Dictio
         return null
       await get_tree().create_timer(0.1).timeout
     return response_dictionary[request_packet.schema_name]
+  elif request_packet is DatabaseTransactionPacket:
+    if response_dictionary.has(request_packet.transaction_name):
+      response_dictionary.erase(request_packet.transaction_name)
+    var max_time := Time.get_ticks_msec() + timeout * 1000.0
+    while not response_dictionary.has(request_packet.transaction_name):
+      if Time.get_ticks_msec() > max_time:
+        push_error("AlexandriaNetClient remote request [", request_packet.get_name(), "] for \"", request_packet.transaction_name, "\" timed out")
+        return null
+      await get_tree().create_timer(0.1).timeout
+    return response_dictionary[request_packet.transaction_name]
   return null
 
 func create_remote_entry(schema_name: String, entry_name: String, timeout := 10.0) -> Error:
@@ -98,14 +114,15 @@ func delete_remote_entry(schema_name: String, entry_name: String, timeout := 10.
 func get_remote_entries(schema_name: String, timeout := 10.0) -> PackedStringArray:
   return await _perform_remote_request(DatabaseSchemaEntriesRequestPacket.new(schema_name), schema_entries_responses, timeout)
 
-# Transaction Name -> Error Code
-var transaction_responses := {}
-func apply_remote_transaction(transaction_name: String, transaction: Alexandria_Transaction = null, timeout := 10.0) -> Error:
+## Returned Array contains two items: [error_code: Error, error_reason: String]
+## error_reason may be left empty (aka: ""), but may contain useful debugging information
+func apply_remote_transaction(transaction_name: String, transaction: Alexandria_Transaction = null, timeout := 10.0) -> Array:
   var transaction_data := Alexandria.get_transaction_data(transaction_name)
   if transaction_data == null:
     push_error("No registered transaction with the name \"", transaction_name, "\"")
-    return ERR_CANT_ACQUIRE_RESOURCE
+    return [ERR_CANT_ACQUIRE_RESOURCE, "Failed "]
   if transaction == null:
     transaction = transaction_data.resource_script.new()
   var packet := DatabaseTransactionRequestPacket.new(transaction, transaction_name)
-  return await _perform_remote_request(packet, transaction_responses, timeout)
+  var response = await _perform_remote_request(packet, transaction_responses, timeout)
+  return response if response != null else [ERR_CANT_RESOLVE, "Underlying _perform_remote_request function failed; likely a timeout"]

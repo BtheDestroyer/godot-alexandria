@@ -44,14 +44,13 @@ func test_remote_db() -> void:
     push_warning("AlexandriaNetClient.connection is not connected...")
     await get_tree().create_timer(0.5).timeout
   print("Remote entries: ", await AlexandriaNetClient.get_remote_entries("test"))
-  var remote_resource := (await AlexandriaNetClient.get_remote_entry("test", "foo", true)) as AlexandriaSchema_Test
-  remote_resource.foo = "Updated"
-  remote_resource.bar = 555
-  match await AlexandriaNetClient.update_remote_entry("test", "foo", remote_resource):
-    OK:
-      print("Updated remote entry")
-    var error:
-      push_error("Failed to update remote entry: ", error_string(error))
+  var transaction := Alexandria_TX_Test.new()
+  transaction.entry_name = "a"
+  match await AlexandriaNetClient.apply_remote_transaction("tx_test", transaction):
+    var result when result[0] == OK:
+      print("Transaction applied")
+    var error_result:
+      push_error("Failed to apply transaction: ", error_string(error_result[0]), "; Details: ", error_result[1])
 
 func _ready() -> void:
   if not Alexandria.library_loaded:

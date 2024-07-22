@@ -155,11 +155,12 @@ class TransactionData:
     if resource_script == null:
       push_error("Failed to load Alexandria transaction script: ", script_path)
       return null
-    if not resource_script.new() is Alexandria_Transaction:
+    var resource_instance := resource_script.new()
+    if not resource_instance is Alexandria_Transaction:
       # Silently ignore non-transactions
       return null
     for required_method: String in ["check_requirements", "apply"]:
-      if not resource_script.has_method(required_method):
+      if not resource_instance.has_method(required_method):
         push_error("Alexandria transaction script is missing the ", required_method, " method: ", script_path)
         return null
     var transaction_data := TransactionData.new()
@@ -196,7 +197,7 @@ class TransactionData:
       return null
     var transaction: Resource = resource_script.new()
     for property: String in exported_properties:
-      transaction.set(property, data["entry"].get(property, transaction.get(property)))
+      transaction.set(property, data["transaction"].get(property, transaction.get(property)))
     return transaction
 
 var config := AlexandriaConfig.new()
@@ -233,7 +234,8 @@ func _ready() -> void:
   loaded_schema_library.emit()
 
 func _build_schema_library() -> void:
-  var schema_names := Array(DirAccess.get_directories_at(config.database_root))
+  var schema_names: Array[String]
+  schema_names.assign(DirAccess.get_directories_at(config.schema_root))
   schema_library.assign(schema_names.map(SchemaData.load).filter(func(x): return x != null))
 
 func get_schema_list() -> PackedStringArray:
@@ -246,8 +248,9 @@ func get_schema_data(schema_name: String) -> SchemaData:
   return null
 
 func _build_transaction_library() -> void:
-  var transaction_names := Array(DirAccess.get_directories_at(config.database_root))
-  transaction_library.assign(transaction_names.map(TransactionData.load).filter(func(x): return x != null))
+  var transaction_names: Array[String]
+  transaction_names.assign(DirAccess.get_files_at(config.transactions_root))
+  transaction_library.assign(transaction_names.map(func(x:String): return TransactionData.load(x.get_basename())).filter(func(x): return x != null))
 
 func get_transaction_list() -> PackedStringArray:
   return transaction_library.map(func(schema_data: SchemaData) -> String: return schema_data.schema_name)

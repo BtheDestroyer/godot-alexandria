@@ -1,5 +1,8 @@
 class_name Alexandria_Transaction extends Resource
 
+# Can be set by check_requirements to improve debugging
+@export var error_reason: String
+
 # Transactions must implement the following methods:
 
 # Returns `true` if the transaction requirements are satisfied, `false` otherwise

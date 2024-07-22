@@ -115,22 +115,32 @@ class DatabaseTransactionPacket extends Packet:
 ## Base type of packets which are a response to DatabaseTransactionPackets
 class DatabaseTransactionResponsePacket extends DatabaseTransactionPacket:
   var code: Error = ERR_UNCONFIGURED
+  var error_reason: String
 
   static func get_name() -> StringName:
     return &"DatabaseTransactionResponsePacket"
 
-  func _init(packet: DatabaseTransactionPacket = null) -> void:
+  func _init(packet: DatabaseTransactionPacket = null, error_reason := "") -> void:
     if packet:
       super(packet.transaction_name)
+    self.error_reason = error_reason
 
   func serialize() -> AlexandriaNet_PacketDataBuffer:
     var data := super()
     data.write_u8(code)
+    data.write_utf8_string(error_reason)
     return data
 
   func deserialize(data: AlexandriaNet_PacketDataBuffer) -> void:
     super(data)
     code = data.read_u8()
+    error_reason = data.read_utf8_string()
+
+  func handle(sender: AlexandriaNet_PacketPeerTCP, net: AlexandriaNet) -> Error:
+    if not net.is_client():
+      return ERR_METHOD_NOT_FOUND
+    net.transaction_response.emit(transaction_name, code, error_reason)
+    return OK
 
 ## Base type of all packets which involve a database transaction
 class DatabaseTransactionRequestPacket extends DatabaseTransactionPacket:
@@ -139,7 +149,7 @@ class DatabaseTransactionRequestPacket extends DatabaseTransactionPacket:
   static func get_name() -> StringName:
     return &"DatabaseTransactionRequestPacket"
 
-  func _init(transaction: Alexandria_Transaction, transaction_name := (transaction.get_script() as GDScript).resource_path.get_file().get_basename()) -> void:
+  func _init(transaction: Alexandria_Transaction = null, transaction_name := ((transaction.get_script() as GDScript).resource_path.get_file().get_basename() if transaction else "")) -> void:
     super(transaction_name)
     self.transaction = transaction
 
@@ -166,12 +176,13 @@ class DatabaseTransactionRequestPacket extends DatabaseTransactionPacket:
   func handle(sender: AlexandriaNet_PacketPeerTCP, net: AlexandriaNet) -> Error:
     var response_packet := DatabaseTransactionResponsePacket.new(self)
     if net.is_server():
-      if transaction == null:
+      if transaction != null:
         if transaction.check_requirements():
           transaction.apply()
           response_packet.code = OK
         else:
-            response_packet.code = ERR_FILE_MISSING_DEPENDENCIES
+          response_packet.error_reason = transaction.error_reason
+          response_packet.code = ERR_FILE_MISSING_DEPENDENCIES
       else:
         response_packet.code = ERR_INVALID_PARAMETER
     else:
@@ -224,15 +235,23 @@ class DatabaseReadRequestPacket extends DatabaseEntryPacket:
         if schema_data.has_entry(entry_name):
           var entry := schema_data.get_entry(entry_name)
           if entry:
-            if Alexandria.get_entry_permissions_for_user(entry, net.get_connected_client_for_connection(sender).session_token.user) & Alexandria_Entry.Permissions.READ:
-              var entry_data := schema_data.serialize_entry(entry_name, entry)
-              if entry_data.size() > 0:
-                response_packet.entry_data = entry_data
-                response_packet.code = OK
+            var connected_client = net.get_connected_client_for_connection(sender)
+            if connected_client != null:
+              var session_token: AlexandriaNet_SessionToken = connected_client.session_token
+              if session_token != null:
+                if Alexandria.get_entry_permissions_for_user(entry, session_token.user) & Alexandria_Entry.Permissions.READ:
+                  var entry_data := schema_data.serialize_entry(entry_name, entry)
+                  if entry_data.size() > 0:
+                    response_packet.entry_data = entry_data
+                    response_packet.code = OK
+                  else:
+                    response_packet.code = ERR_CANT_RESOLVE
+                else:
+                  response_packet.code = ERR_FILE_NO_PERMISSION
               else:
-                response_packet.code = ERR_CANT_RESOLVE
+                response_packet.code = ERR_UNAUTHORIZED
             else:
-              response_packet.code = ERR_FILE_NO_PERMISSION
+              response_packet.code = ERR_UNAUTHORIZED
           else:
             response_packet.code = ERR_DATABASE_CANT_READ
         else:
@@ -449,3 +468,4 @@ signal read_database_entry_response(schema_name: String, entry_name: String, ent
 signal updated_database_entry_response(schema_name: String, entry_name: String, code: Error)
 signal deleted_database_entry_response(schema_name: String, entry_name: String, code: Error)
 signal database_schema_entries_response(schema_name: String, entries: PackedStringArray)
+signal transaction_response(transaction_name: String, code: Error, error_reason: String)
