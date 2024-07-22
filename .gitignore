@@ -5,3 +5,4 @@ android/
 crypto.key
 users/
 database/
+build/

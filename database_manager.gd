@@ -22,13 +22,6 @@ func _ready() -> void:
     schema_button.pressed.connect(_on_schema_button_pressed.bind(schema_name, schema_button))
     schema_button.pressed.connect(_on_list_button_pressed.bind(schema_button_container, schema_button))
     schema_button_container.add_child(schema_button)
-    
-  while not AlexandriaNetClient.is_connected_to_server():
-    await get_tree().create_timer(0.5).timeout
-  var create_result := await AlexandriaNetClient.create_remote_user("john", "foobar")
-  print("create_remote_user(...) -> ", error_string(create_result))
-  var login_result := await AlexandriaNetClient.login_remote_user("john", "foobar")
-  print("login_remote_user(...) -> ", error_string(login_result))
   
 func _notification(what: int) -> void:
   match what:

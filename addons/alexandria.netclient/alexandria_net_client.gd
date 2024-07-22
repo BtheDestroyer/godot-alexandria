@@ -117,10 +117,12 @@ func _perform_remote_request(request_packet: Packet, response_dictionary: Dictio
   return null
 
 func create_remote_entry(schema_name: String, entry_name: String, timeout := 10.0) -> Error:
-  return await _perform_remote_request(DatabaseCreateRequestPacket.new(schema_name, entry_name), create_responses, timeout)
+  var response = await _perform_remote_request(DatabaseCreateRequestPacket.new(schema_name, entry_name), create_responses, timeout)
+  return response if response != null else ERR_CANT_RESOLVE
 
 func get_remote_entry(schema_name: String, entry_name: String, timeout := 10.0) -> Resource:
-  return await _perform_remote_request(DatabaseReadRequestPacket.new(schema_name, entry_name), read_responses, timeout)
+  var response = await _perform_remote_request(DatabaseReadRequestPacket.new(schema_name, entry_name), read_responses, timeout)
+  return response if response != null else ERR_CANT_RESOLVE
 
 func update_remote_entry(schema_name: String, entry_name: String, entry_data: Resource, timeout := 10.0) -> Error:
   var request_packet := DatabaseUpdateRequestPacket.new(schema_name, entry_name)
@@ -128,25 +130,30 @@ func update_remote_entry(schema_name: String, entry_name: String, entry_data: Re
   if not schema_data:
     return ERR_QUERY_FAILED
   request_packet.entry_data = schema_data.serialize_entry(entry_name, entry_data)
-  return await _perform_remote_request(request_packet, update_responses, timeout)
+  var response = await _perform_remote_request(request_packet, update_responses, timeout)
+  return response if response != null else ERR_CANT_RESOLVE
 
 func delete_remote_entry(schema_name: String, entry_name: String, timeout := 10.0) -> Error:
-  return await _perform_remote_request(DatabaseDeleteRequestPacket.new(schema_name, entry_name), delete_responses, timeout)
+  var response = await _perform_remote_request(DatabaseDeleteRequestPacket.new(schema_name, entry_name), delete_responses, timeout)
+  return response if response != null else ERR_CANT_RESOLVE
 
 func get_remote_entries(schema_name: String, timeout := 10.0) -> PackedStringArray:
-  return await _perform_remote_request(DatabaseSchemaEntriesRequestPacket.new(schema_name), schema_entries_responses, timeout)
+  var response = await _perform_remote_request(DatabaseSchemaEntriesRequestPacket.new(schema_name), schema_entries_responses, timeout)
+  return response if response != null else ERR_CANT_RESOLVE
 
 func create_remote_user(username: String, password: String, timeout := 10.0) -> Error:
   var packet := CreateUserRequestPacket.new()
   packet.username = username
   packet.password = password
-  return await _perform_remote_request(packet, create_user_responses, timeout)
+  var response = await _perform_remote_request(packet, create_user_responses, timeout)
+  return response if response != null else ERR_CANT_RESOLVE
   
 func login_remote_user(username: String, password: String, timeout := 10.0) -> Error:
   var packet := LoginRequestPacket.new()
   packet.username = username
   packet.password = password
-  return await _perform_remote_request(packet, login_responses, timeout)
+  var response = await _perform_remote_request(packet, login_responses, timeout)
+  return response if response != null else ERR_CANT_RESOLVE
 
 ## Returned Array contains two items: [error_code: Error, error_reason: String]
 ## error_reason may be left empty (aka: ""), but may contain useful debugging information
