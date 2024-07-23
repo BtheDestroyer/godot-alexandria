@@ -208,6 +208,21 @@ class DatabaseCreateRequestPacket extends DatabaseEntryPacket:
       var schema_data := Alexandria.get_schema_data(schema_name)
       if schema_data:
         response_packet.code = schema_data.create_entry(entry_name)
+        if response_packet.code == OK:
+          var entry_data := schema_data.get_entry(entry_name)
+          if entry_data is Alexandria_Entry:
+            var connected_client = net.get_connected_client_for_connection(sender)
+            if connected_client != null:
+              var session_token: AlexandriaNet_SessionToken = connected_client.session_token
+              if session_token != null:
+                entry_data.owner = session_token.user
+                response_packet.code = schema_data.update_entry(entry_name, entry_data)
+              else:
+                response_packet.code = ERR_UNAUTHORIZED
+            else:
+              response_packet.code = ERR_UNAUTHORIZED
+            if response_packet.code != OK:
+              schema_data.delete_entry(entry_name)
       else:
         response_packet.code = ERR_INVALID_PARAMETER
     else:
@@ -249,7 +264,7 @@ class DatabaseReadRequestPacket extends DatabaseEntryPacket:
                   var entry_data := schema_data.serialize_entry(entry_name, entry)
                   if entry_data.size() > 0:
                     response_packet.entry_data = entry_data
-                    response_packet.code = OK
+                    response_packet.code = OK 
                   else:
                     response_packet.code = ERR_CANT_RESOLVE
                 else:
