@@ -12,7 +12,7 @@ enum Rank {
 @export var email: String
 @export var password_salt: PackedByteArray
 @export var password_hash: PackedByteArray
-@export var rank := Rank.UNVALIDATED
+@export var rank := Rank.USER
 var session_tokens: Array[AlexandriaNet_SessionToken]
 
 func get_username() -> String:

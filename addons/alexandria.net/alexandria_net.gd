@@ -255,7 +255,7 @@ class DatabaseReadRequestPacket extends DatabaseEntryPacket:
                 else:
                   response_packet.code = ERR_FILE_NO_PERMISSION
               else:
-                response_packet.code = ERR_UNAUTHORIZED
+                    response_packet.code = ERR_UNAUTHORIZED
             else:
               response_packet.code = ERR_UNAUTHORIZED
           else:
@@ -439,7 +439,7 @@ class PublicKeyPacket extends Packet:
   var key := CryptoKey.new()
   
   static func get_name() -> StringName:
-    return &"DatabaseLoginRequestPacket"
+    return &"PublicKeyPacket"
     
   static func is_encrypted() -> bool:
     return false
@@ -554,11 +554,15 @@ class LoginRequestPacket extends UserRequestPacket:
   func handle(sender: AlexandriaNet_PacketPeerTCP, net: AlexandriaNet) -> Error:
     var response_packet := LoginResponsePacket.new(self)
     if net.is_server():
-      var session_token: AlexandriaNet_SessionToken = net.attempt_login(username, password)
-      if session_token:
-        response_packet.code = OK
+      var connected_client = net.get_connected_client_for_connection(sender)
+      if connected_client != null:
+        connected_client.session_token = net.attempt_login(username, password)
+        if connected_client.session_token:
+          response_packet.code = OK
+        else:
+          response_packet.code = ERR_INVALID_PARAMETER
       else:
-        response_packet.code = ERR_INVALID_PARAMETER
+        response_packet.code = ERR_CONNECTION_ERROR
     else:
       response_packet.code = ERR_QUERY_FAILED
     sender.put_packet(net.serialize_packet(response_packet).raw_bytes())

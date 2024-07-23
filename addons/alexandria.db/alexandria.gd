@@ -123,6 +123,8 @@ class SchemaData:
     return json.to_utf8_buffer()
 
   func deserialize_entry(buffer: PackedByteArray) -> Resource:
+    if buffer.size() == 0:
+      return null
     var json := buffer.get_string_from_utf8()
     var data := JSON.parse_string(json)
     if data["db"]["schema"] != schema_name:
@@ -274,8 +276,12 @@ func get_entry_permissions_for_user(entry: Resource, user: Alexandria_User) -> A
       permissions |= entry.owner_permissions
     else:
       permissions |= entry.everyone_permissions
+  else:
+    permissions |= Alexandria_Entry.Permissions.READ_UPDATE
   match user.rank:
-    Alexandria_User.Rank.UNVALIDATED, Alexandria_User.Rank.USER:
+    Alexandria_User.Rank.UNVALIDATED:
+      permissions &= Alexandria_Entry.Permissions.READ
+    Alexandria_User.Rank.USER:
       pass
     Alexandria_User.Rank.MODERATOR:
       permissions |= Alexandria_Entry.Permissions.READ
