@@ -99,7 +99,7 @@ func _process(_delta: float) -> void:
     welcome_packet.key.load_from_string(crypto_key.save_to_string(true), true)
     var packet_bytes := serialize_packet(welcome_packet).raw_bytes()
     connection.put_packet(packet_bytes)
-  var to_remove: Array[AlexandriaNet_PacketPeerTCP]
+  var to_remove: Array[ConnectedClient]
   for client: ConnectedClient in connected_clients:
     if client.connection.poll() != OK or client.connection.is_socket_disconnected():
       print("AlexandriaNetServer dropped the connection from ", client.connection.get_connected_host(), ":", client.connection.get_connected_port())
