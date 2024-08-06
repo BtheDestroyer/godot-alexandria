@@ -307,9 +307,9 @@ class DatabaseReadResponsePacket extends DatabaseEntryResponsePacket:
     if not schema_data:
       return ERR_INVALID_PARAMETER
     var entry := schema_data.deserialize_entry(entry_data)
+    net.read_database_entry_response.emit(schema_name, entry_name, entry)
     if not entry:
       return ERR_CANT_RESOLVE
-    net.read_database_entry_response.emit(schema_name, entry_name, entry)
     return OK
 
 ## Requests a database entry to be updated on the remote AlexandriaNetServer
@@ -609,6 +609,8 @@ var packet_types := [
   DatabaseReadResponsePacket,
   DatabaseUpdateRequestPacket,
   DatabaseUpdateResponsePacket,
+  DatabaseDeleteRequestPacket,
+  DatabaseDeleteResponsePacket,
   DatabaseSchemaEntriesRequestPacket,
   DatabaseSchemaEntriesResponsePacket,
   CreateUserRequestPacket,

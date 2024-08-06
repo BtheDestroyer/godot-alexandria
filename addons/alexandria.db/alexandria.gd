@@ -130,10 +130,12 @@ class SchemaData:
     if data["db"]["schema"] != schema_name:
       push_error("Tried to deserialize an Alexandria entry for the schema \"", data["db"]["schema"], "\" with the schema \"", schema_name, "\"")
       return null
-    var entry: Resource = resource_script.new()
-    entry.resource_path = entries_path.path_join(data["db"]["entry"]) + (".res" if data["db"]["binary"] else ".tres")
+    var entry: Resource = get_entry(data["db"]["entry"]) if has_entry(data["db"]["entry"]) else resource_script.new()
+    if entry.resource_path == "":
+      entry.resource_path = entries_path.path_join(data["db"]["entry"]) + (".res" if data["db"]["binary"] else ".tres")
     for property: String in exported_properties:
-      entry.set(property, data["entry"].get(property, entry.get(property)))
+      if data["entry"].has(property):
+        entry.set(property, data["entry"][property])
     return entry
 
 class TransactionData:
@@ -209,7 +211,7 @@ var library_loaded := false
 
 static func filter_exported_properties(properties: Array[Dictionary]) -> PackedStringArray:
   var exported_properties: Array[String]
-  exported_properties.assign(properties.filter(func(property: Dictionary): return property["usage"] & PROPERTY_USAGE_SCRIPT_VARIABLE != 0).map(func(property: Dictionary): return property["name"]))
+  exported_properties.assign(properties.filter(func(property: Dictionary): return property["usage"] & PROPERTY_USAGE_SCRIPT_VARIABLE != 0 and property["name"] not in [&"owner", &"owner_permissions", &"everyone_permissions"]).map(func(property: Dictionary): return property["name"]))
   return exported_properties
 
 static func get_exported_properties(object: Object) -> PackedStringArray:

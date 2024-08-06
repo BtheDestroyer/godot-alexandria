@@ -24,7 +24,7 @@ func get_connected_client_for_connection(connection: AlexandriaNet_PacketPeerTCP
   return null
 
 func _generate_crypto_key() -> void:
-  crypto_key = crypto.generate_rsa(1024)
+  crypto_key = crypto.generate_rsa(4096)
   match crypto_key.save("./crypto.key"):
     OK:
       pass
