@@ -22,7 +22,7 @@ func _ready() -> void:
     schema_button.pressed.connect(_on_schema_button_pressed.bind(schema_name, schema_button))
     schema_button.pressed.connect(_on_list_button_pressed.bind(schema_button_container, schema_button))
     schema_button_container.add_child(schema_button)
-  
+
 func _notification(what: int) -> void:
   match what:
     NOTIFICATION_EXIT_TREE:

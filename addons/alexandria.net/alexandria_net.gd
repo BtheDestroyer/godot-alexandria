@@ -5,10 +5,10 @@ var crypto := Crypto.new()
 const DEFAULT_PORT := 34902
 
 class Packet:
-  
+
   static func get_name() -> StringName:
     return &"Packet"
-    
+
   static func is_encrypted() -> bool:
     return true
 
@@ -264,7 +264,7 @@ class DatabaseReadRequestPacket extends DatabaseEntryPacket:
                   var entry_data := schema_data.serialize_entry(entry_name, entry)
                   if entry_data.size() > 0:
                     response_packet.entry_data = entry_data
-                    response_packet.code = OK 
+                    response_packet.code = OK
                   else:
                     response_packet.code = ERR_CANT_RESOLVE
                 else:
@@ -452,13 +452,13 @@ class DatabaseSchemaEntriesResponsePacket extends DatabaseSchemaResponsePacket:
 ## Public key provided by AlexandriaNetServer to enable encrypted traffic to the server
 class PublicKeyPacket extends Packet:
   var key := CryptoKey.new()
-  
+
   static func get_name() -> StringName:
     return &"PublicKeyPacket"
-    
+
   static func is_encrypted() -> bool:
     return false
-    
+
   func serialize() -> AlexandriaNet_PacketDataBuffer:
     var data := super()
     data.write_utf8_string(key.save_to_string(true))
@@ -467,24 +467,24 @@ class PublicKeyPacket extends Packet:
   func deserialize(data: AlexandriaNet_PacketDataBuffer) -> void:
     super(data)
     key.load_from_string(data.read_utf8_string(), true)
-  
+
   func handle(sender: AlexandriaNet_PacketPeerTCP, net: AlexandriaNet) -> Error:
     if not net.is_client():
       return ERR_METHOD_NOT_FOUND
     net.remote_public_key = key
     return OK
-    
+
 ## Packet involving a user or session interaction
 class UserPacket extends Packet:
   var username: String
-  
+
   static func get_name() -> StringName:
     return &"UserPacket"
 
   func _init(packet: UserPacket = null) -> void:
     if packet:
       username = packet.username
-  
+
   func serialize() -> AlexandriaNet_PacketDataBuffer:
     var data := super()
     data.write_utf8_string(username)
@@ -493,14 +493,14 @@ class UserPacket extends Packet:
   func deserialize(data: AlexandriaNet_PacketDataBuffer) -> void:
     super(data)
     username = data.read_utf8_string()
-  
+
 ## Sent by AlexandriaNetClient to request a user or session interaction
 class UserRequestPacket extends UserPacket:
   var password: String
-  
+
   static func get_name() -> StringName:
     return &"UserRequestPacket"
-  
+
   func serialize() -> AlexandriaNet_PacketDataBuffer:
     var data := super()
     data.write_utf8_string(password)
@@ -509,7 +509,7 @@ class UserRequestPacket extends UserPacket:
   func deserialize(data: AlexandriaNet_PacketDataBuffer) -> void:
     super(data)
     password = data.read_utf8_string()
-  
+
 ## Sent by AlexandriaNetServer in response to a UserRequestPacket
 class UserResponsePacket extends UserPacket:
   var code: Error = ERR_UNCONFIGURED
@@ -519,7 +519,7 @@ class UserResponsePacket extends UserPacket:
 
   func _init(packet: UserRequestPacket = null) -> void:
     super(packet)
-  
+
   func serialize() -> AlexandriaNet_PacketDataBuffer:
     var data := super()
     data.write_u8(code)
@@ -531,7 +531,7 @@ class UserResponsePacket extends UserPacket:
 
 ## Request by AlexandriaNetClient to request a new user be created
 class CreateUserRequestPacket extends UserRequestPacket:
-  
+
   static func get_name() -> StringName:
     return &"CreateUserRequestPacket"
 
@@ -559,10 +559,10 @@ class CreateUserResponsePacket extends UserResponsePacket:
       return ERR_METHOD_NOT_FOUND
     net.create_user_response.emit(username, code)
     return OK
-    
+
 ## Request by AlexandriaNetClient to initiate a user session
 class LoginRequestPacket extends UserRequestPacket:
-  
+
   static func get_name() -> StringName:
     return &"LoginRequestPacket"
 

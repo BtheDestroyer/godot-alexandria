@@ -6,7 +6,7 @@ var remote_public_key: CryptoKey
 
 func is_client() -> bool:
   return true
-  
+
 func is_connected_to_server() -> bool:
   return connection.is_socket_connected() and remote_public_key != null
 
@@ -60,7 +60,7 @@ func _store_remote_schema_response(schema_name: String, response, response_dicti
 var transaction_responses := {}
 func _store_remote_transaction_response(transaction_name: String, response_code: Error, response_reason: String, response_dictionary: Dictionary) -> void:
   response_dictionary[transaction_name] = [response_code, response_reason]
-  
+
 # Username -> Error Code
 var create_user_responses := {}
 var login_responses := {}
@@ -147,7 +147,7 @@ func create_remote_user(username: String, password: String, timeout := 10.0) -> 
   packet.password = password
   var response = await _perform_remote_request(packet, create_user_responses, timeout)
   return response if response != null else ERR_CANT_RESOLVE
-  
+
 func login_remote_user(username: String, password: String, timeout := 10.0) -> Error:
   var packet := LoginRequestPacket.new()
   packet.username = username
