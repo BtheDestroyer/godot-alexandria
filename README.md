@@ -40,7 +40,7 @@ func _ready():
 
 I wanted to easily manage Resources for online Godot projects in an database without needing to write project-specific code for serializing, transmitting, deserializing, and validating those Resources.
 
-Alexandria is a project attempting to fulfill this niche. The primary goal is to allow for Godot facilitate the creation of online games without *necessarily* writing any networking code.
+Alexandria is a project attempting to fulfill this niche. The primary goal is to help facilitate the creation of online games in Godot without *necessarily* writing any networking code.
 
 ## Disclaimer
 
