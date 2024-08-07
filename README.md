@@ -6,7 +6,8 @@ class_name PlayerData extends Resource
 
 @export var name: String
 @export var gold := 0
-@export var 
+# item_name: String -> item_count: int
+@export var items := {}
 ```
 
 ```gdscript
@@ -196,6 +197,7 @@ class_name PlayerData extends Alexandria_Entry
 
 @export var name: String
 @export var gold := 0
+# item_name: String -> item_count: int
 @export var items := {
   "Potion": 1
 }
