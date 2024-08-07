@@ -27,3 +27,7 @@ enabled=PackedStringArray("res://addons/alexandria.db/plugin.cfg", "res://addons
 [gui]
 
 theme/custom="res://ProjectTheme.tres"
+
+[rendering]
+
+textures/vram_compression/import_etc2_astc=true
