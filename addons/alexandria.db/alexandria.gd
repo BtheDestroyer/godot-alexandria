@@ -103,30 +103,52 @@ class SchemaData:
       return DirAccess.remove_absolute(entries_path.path_join(entry_name + ".res"))
     return ERR_DOES_NOT_EXIST
 
+  func convert_entry_to_dictionary(entry_name: String, entry: Resource = null) -> Dictionary:
+    if entry == null:
+      entry = get_entry(entry_name)
+      if entry == null:
+        push_error("No entry for the Alexandria schema \"", schema_name, "\" with the name: ", entry_name)
+        return {}
+    var data := {}
+    var encoded_children := []
+    for property: String in exported_properties:
+      var value := entry.get(property)
+      if value is not Resource:
+        data[property] = value
+        continue
+      if Alexandria.is_resource_an_entry(value):
+        var child_schema := Alexandria.get_schema_data(value.resource_path.get_base_dir().get_file())
+        data[property] = child_schema.convert_entry_to_dictionary(value)
+        encoded_children.push_back(property)
+      elif value.resource_path.starts_with("res://"):
+        data[property] = {
+          "script": value.get_script().resource_path,
+          "path": value.resource_path
+        }
+        encoded_children.push_back(property)
+      else:
+        push_error("Cannot encode local non-entry Resource \"", value.resource_path, "\" (\"", property,"\"),  within database entry: ", schema_name, "/", entry_name)
+    return {
+      "db": {
+        "schema": schema_name,
+        "entry": entry_name,
+        "binary": entry.resource_path.ends_with(".res"),
+        "encoded_children": encoded_children
+      },
+      "entry": data
+    }
+
   func serialize_entry(entry_name: String, entry: Resource = null) -> PackedByteArray:
     if entry == null:
       entry = get_entry(entry_name)
       if entry == null:
         push_error("No entry for the Alexandria schema \"", schema_name, "\" with the name: ", entry_name)
         return []
-    var data := {
-      "db": {
-        "schema": schema_name,
-        "entry": entry_name,
-        "binary": entry.resource_path.ends_with(".res")
-      },
-      "entry": {}
-    }
-    for property: String in exported_properties:
-      data["entry"][property] = entry.get(property)
+    var data := convert_entry_to_dictionary(entry_name, entry)
     var json := JSON.stringify(data)
     return json.to_utf8_buffer()
 
-  func deserialize_entry(buffer: PackedByteArray) -> Resource:
-    if buffer.size() == 0:
-      return null
-    var json := buffer.get_string_from_utf8()
-    var data := JSON.parse_string(json)
+  func convert_dictionary_to_entry(data: Dictionary) -> Resource:
     if data["db"]["schema"] != schema_name:
       push_error("Tried to deserialize an Alexandria entry for the schema \"", data["db"]["schema"], "\" with the schema \"", schema_name, "\"")
       return null
@@ -134,9 +156,29 @@ class SchemaData:
     if entry.resource_path == "":
       entry.resource_path = entries_path.path_join(data["db"]["entry"]) + (".res" if data["db"]["binary"] else ".tres")
     for property: String in exported_properties:
-      if data["entry"].has(property):
-        entry.set(property, data["entry"][property])
+      if not data["entry"].has(property):
+        continue
+      if data["db"]["encoded_children"].has(property):
+        if "db" in data["entry"][property]:
+          var child_schema := Alexandria.get_schema_data(data["entry"][property]["db"]["schema"])
+          entry.set(property, child_schema.convert_dictionary_to_entry(data["entry"][property]))
+        elif "path" in data["entry"][property]:
+          var resource := ResourceLoader.load(data["entry"][property]["path"])
+          if resource == null:
+            push_error("Cannot load local non-entry Resource \"", data["entry"][property]["path"], "\" (\"", property,"\"),  within database entry: ", schema_name, "/", data["db"]["entry"])
+            continue
+          entry.set(property, resource)
+        else:
+          push_error("Cannot decode property \"", property,"\" within database entry \"", schema_name, "/", data["db"]["entry"], "\". Full encoded child: ", str(data["entry"][property]))
+      entry.set(property, data["entry"][property])
     return entry
+
+  func deserialize_entry(buffer: PackedByteArray) -> Resource:
+    if buffer.size() == 0:
+      return null
+    var json := buffer.get_string_from_utf8()
+    var data := JSON.parse_string(json)
+    return convert_dictionary_to_entry(data)
 
 class TransactionData:
   var transaction_name: String
@@ -245,6 +287,9 @@ func _build_schema_library() -> void:
 func get_schema_list() -> PackedStringArray:
   return schema_library.map(func(schema_data: SchemaData) -> String: return schema_data.schema_name)
 
+func does_schema_exist(schema_name: String) -> bool:
+  return schema_name in schema_library
+
 func get_schema_data(schema_name: String) -> SchemaData:
   for schema_data in schema_library:
     if schema_data.schema_name == schema_name:
@@ -264,6 +309,21 @@ func get_transaction_data(transaction_name: String) -> TransactionData:
     if transaction_data.transaction_name == transaction_name:
       return transaction_data
   return null
+
+func is_resource_path_an_entry(resource_path: String) -> bool:
+  if ProjectSettings.globalize_path(resource_path.get_base_dir().get_base_dir()) != ProjectSettings.globalize_path(config.database_root):
+    return false
+  var schema_name := resource_path.get_base_dir().get_file()
+  if not does_schema_exist(schema_name):
+    return false
+  return is_resource_an_entry(ResourceLoader.load(resource_path))
+
+func is_resource_an_entry(resource: Resource) -> bool:
+  var schema_name := resource.resource_path.get_base_dir().get_file()
+  var schema_data := get_schema_data(schema_name)
+  if not schema_data:
+    return false
+  return resource.get_script() == schema_data.resource_script
 
 func get_entry(schema_name: String, entry_name: String) -> Resource:
   var schema_data := get_schema_data(schema_name)
