@@ -47,7 +47,7 @@ var create_responses := {}
 var update_responses := {}
 var delete_responses := {}
 func _store_remote_entry_response(schema_name: String, entry_name: String, response, response_dictionary: Dictionary) -> void:
-  if not response_dictionary.has(schema_name):
+  if schema_name not in response_dictionary:
     response_dictionary[schema_name] = {}
   response_dictionary[schema_name][entry_name] = response
 
@@ -75,14 +75,14 @@ func _perform_remote_request(request_packet: Packet, response_dictionary: Dictio
       push_error("AlexandriaNetClient failed to send read request packet: ", error_string(error))
       return null
   if request_packet is DatabaseEntryPacket:
-    if response_dictionary.get(request_packet.schema_name, {}).has(request_packet.entry_name):
+    if request_packet.schema_name in response_dictionary and request_packet.entry_name in response_dictionary[request_packet.schema_name]:
       response_dictionary[request_packet.schema_name].erase(request_packet.entry_name)
     var max_time := Time.get_ticks_msec() + timeout * 1000.0
     while not response_dictionary.get(request_packet.schema_name, {}).has(request_packet.entry_name):
       if Time.get_ticks_msec() > max_time:
         push_error("AlexandriaNetClient remote request [", request_packet.get_name(), "] for ", request_packet.schema_name, "/", request_packet.entry_name, " timed out")
         return null
-      await get_tree().create_timer(0.1).timeout
+      await get_tree().process_frame
     return response_dictionary[request_packet.schema_name][request_packet.entry_name]
   elif request_packet is DatabaseSchemaPacket:
     if response_dictionary.has(request_packet.schema_name):
@@ -92,7 +92,7 @@ func _perform_remote_request(request_packet: Packet, response_dictionary: Dictio
       if Time.get_ticks_msec() > max_time:
         push_error("AlexandriaNetClient remote request [", request_packet.get_name(), "] for ", request_packet.schema_name, "/", request_packet.entry_name, " timed out")
         return null
-      await get_tree().create_timer(0.1).timeout
+      await get_tree().process_frame
     return response_dictionary[request_packet.schema_name]
   elif request_packet is DatabaseTransactionPacket:
     if response_dictionary.has(request_packet.transaction_name):
@@ -102,7 +102,7 @@ func _perform_remote_request(request_packet: Packet, response_dictionary: Dictio
       if Time.get_ticks_msec() > max_time:
         push_error("AlexandriaNetClient remote request [", request_packet.get_name(), "] for \"", request_packet.transaction_name, "\" timed out")
         return null
-      await get_tree().create_timer(0.1).timeout
+      await get_tree().process_frame
     return response_dictionary[request_packet.transaction_name]
   elif request_packet is UserPacket:
     if response_dictionary.has(request_packet.username):
@@ -112,7 +112,7 @@ func _perform_remote_request(request_packet: Packet, response_dictionary: Dictio
       if Time.get_ticks_msec() > max_time:
         push_error("AlexandriaNetClient remote request [", request_packet.get_name(), "] for \"", request_packet.username, "\" timed out")
         return null
-      await get_tree().create_timer(0.1).timeout
+      await get_tree().process_frame
     return response_dictionary[request_packet.username]
   return null
 
@@ -122,14 +122,14 @@ func create_remote_entry(schema_name: String, entry_name: String, timeout := 10.
 
 func get_remote_entry(schema_name: String, entry_name: String, timeout := 10.0) -> Resource:
   var response = await _perform_remote_request(DatabaseReadRequestPacket.new(schema_name, entry_name), read_responses, timeout)
-  return response if response != null else ERR_CANT_RESOLVE
+  return response
 
 func update_remote_entry(schema_name: String, entry_name: String, entry_data: Resource, timeout := 10.0) -> Error:
   var request_packet := DatabaseUpdateRequestPacket.new(schema_name, entry_name)
   var schema_data := Alexandria.get_schema_data(schema_name)
   if not schema_data:
     return ERR_QUERY_FAILED
-  request_packet.entry_data = schema_data.serialize_entry(entry_name, entry_data)
+  request_packet.entry_data = schema_data.serialize_entry(entry_name, entry_data, false)
   var response = await _perform_remote_request(request_packet, update_responses, timeout)
   return response if response != null else ERR_CANT_RESOLVE
 

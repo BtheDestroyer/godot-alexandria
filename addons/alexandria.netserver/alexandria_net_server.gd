@@ -113,6 +113,6 @@ func _process(_delta: float) -> void:
         OK:
           pass
         var error:
-          push_error("AlexandriaNetServer failed to handle packet. Error: ", error_string(error), " Packet ID: ", packet_types.find(packet.get_script()))
+          push_error("AlexandriaNetServer failed to handle packet. Error: ", error_string(error), " Packet ID: ", packet_types.find(packet.get_script()), " Packet Type: ", packet.get_name())
   for client in to_remove:
     connected_clients.erase(client)

@@ -261,7 +261,7 @@ class DatabaseReadRequestPacket extends DatabaseEntryPacket:
               var session_token: AlexandriaNet_SessionToken = connected_client.session_token
               if session_token != null:
                 if Alexandria.get_entry_permissions_for_user(entry, session_token.user) & Alexandria_Entry.Permissions.READ:
-                  var entry_data := schema_data.serialize_entry(entry_name, entry)
+                  var entry_data := schema_data.serialize_entry(entry_name, entry, true)
                   if entry_data.size() > 0:
                     response_packet.entry_data = entry_data
                     response_packet.code = OK
@@ -270,7 +270,7 @@ class DatabaseReadRequestPacket extends DatabaseEntryPacket:
                 else:
                   response_packet.code = ERR_FILE_NO_PERMISSION
               else:
-                    response_packet.code = ERR_UNAUTHORIZED
+                response_packet.code = ERR_UNAUTHORIZED
             else:
               response_packet.code = ERR_UNAUTHORIZED
           else:

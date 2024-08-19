@@ -74,6 +74,9 @@ func _on_entry_button_pressed(entry_name: String, entry_button: Button) -> void:
   entry_delete_button.disabled = false
   selected_entry_name = entry_name
   selected_entry = selected_schema_data.get_entry(entry_name)
+  if not selected_entry:
+    _create_entry_field(null, preload("res://entry_field_nodes/entry_field_unknown.tscn"), "Error", "Failed to load entry data...")
+    return
   for property_name: String in _Alexandria.get_exported_properties(selected_entry):
     match selected_entry.get(property_name):
       var var_string when var_string is String or var_string is StringName:
