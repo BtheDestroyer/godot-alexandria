@@ -207,7 +207,6 @@ class SchemaData:
         return []
     var data := convert_entry_to_dictionary(entry_name, entry, fully_encode_child_entries)
     var json := JSON.stringify(data)
-    print("Serialized data: ", JSON.stringify(data, "  "))
     return json.to_utf8_buffer()
 
   func convert_dictionary_to_entry(data: Dictionary) -> Resource:
@@ -253,7 +252,6 @@ class SchemaData:
     encoded_properties.assign(data["db"]["encoded_properties"])
     for property: String in Array(exported_properties).filter(data["entry"].keys().has):
       var value = _decode_property(property, data["entry"][property], encoded_properties, entry_name)
-      print(property, " = ", value)
       if entry.get(property) is Array:
         entry[property].assign(value) # Avoids issues with typed arrays
       else:
